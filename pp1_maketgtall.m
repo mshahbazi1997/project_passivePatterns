@@ -1,0 +1,46 @@
+function varargout=pp1_maketgtall(varargin); 
+% maketgtall specific params
+numRuns     = 8;        % number of target files to be made
+sn          = 'p01';    % subject number
+outDir      = cd;       % output directory for target files
+% target file params
+numStim     = 5;        % number of stimulations per trial
+numReps     = 2;        % repetitions per chord
+numRests    = [6,1];    % number of rest periods during block
+numFalse    = 5;        % number of false response trials per block
+lengthRests = [9000,15000]; % length of one rest period (ms)
+chordNum    = [1:31];   % 1:5 are flexion, 6:10 are extension
+forceN      = 2;        % force applied to stimulated finger
+cueTime     = 500;      % ms
+stimTime    = 4000;     % time for finger stimulation (in ms)
+respTime    = 1500;     % time to wait for chord response (in ms)
+fbTime      = 500;      % feedback time per trial (ms)
+ITI         = 1000;     % ms 
+TR          = 1500;     % ms
+dummyscans  = 2;        % number of dummy scans @ start of block
+vararginoptions(varargin,{'numStim','numReps','forceN','numFalse',...
+    'numRests','lengthRests','chordNum','cueTime','stimTime','trialTime',...
+    'ITI','TR','dummyscans','numRuns','sn','outDir'});
+
+D=[]; 
+for s=1:length(sn)
+    for i=1:numRuns 
+        T=pp1_maketgt('numStim',numStim,...
+                     'numReps',numReps,...
+                     'numRests',numRests,...
+                     'numFalse',numFalse,...
+                     'lengthRests',lengthRests,...
+                     'cueTime',cueTime,...
+                     'stimTime',stimTime,...
+                     'respTime',respTime,...
+                     'fbTime',fbTime,...    
+                     'chordNum',chordNum,...
+                     'forceN',forceN,...
+                     'TR',TR,'ITI',ITI,...
+                     'dummyscans',dummyscans); 
+        dsave(fullfile(outDir,sprintf('pp1_%s_%d.tgt',sn{s},i)),T);
+        D=addstruct(D,T); 
+    end
+end;
+varargout = {D};
+
