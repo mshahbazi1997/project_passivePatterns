@@ -1,63 +1,74 @@
 function varargout=pp1_maketgt(varargin); 
 numStim     = 5;        % number of stimulations per trial
 numReps     = 2;        % repetitions per chord
-chordNum    = 1:31;     % 1:5 are flexion, 6:10 are extension
+chordNum    = [1:31];   % 1:5 are flexion, 6:10 are extension
 forceN      = 3;        % force applied to stimulated finger
+numRests    = [6,1];    % number of rest periods during block
 numFalse    = 5;        % number of incorrect chord presentations
+lengthRests = [9000,15000]; % length of one rest period (ms)
 cueTime     = 500;      % ms
 stimTime    = 4000;     % time for finger stimulation (in ms)
 respTime    = 1500;     % time to wait for chord response (in ms)
 fbTime      = 500;      % feedback time per trial (ms)
+ITI         = 1000;     % ms 
 TR          = 1500;     % ms
 dummyscans  = 2;        % number of dummy scans @ start of block
 vararginoptions(varargin,{'numStim','numReps','forceN','numFalse',...
-    'chordNum','cueTime','stimTime','respTime','fbTime',...
-    'TR','dummyscans'});
+    'numRests','lengthRests','chordNum','cueTime','stimTime','respTime','fbTime',...
+    'ITI','TR','dummyscans'});
 
-numConds  = length(chordNum);
-numTrials = numReps*numConds;
-
-%- - - - - - -
-% determine random rest itis
-%- - - - - - -
-iti         = [1:1.5:15].*1000;                 % variable inter-trial-interval duration (in ms)
-niti        = numel(iti);                       % how many iti types
-prb         = geopdf(1:niti, .3);               % geometric probability distribution function with p = 0.3
-pct         = prb./sum(prb);                    % proportion of trials per ITI type 
-nt_iti      = round(numTrials * pct);  % how many trials per ITI type
-% correcting because rest itis are between trials, so num itis = numTrials-1
-% While we could correct earlier, this way we ensure that the shortest iti
-% is the one affected, and not longer itis.
-
-% Make randomly shuffled rest itis
-nt_iti(1)   = nt_iti(1)-1;                      
-lengthRests = [];
-for i = 1:niti
-    lengthRests = [lengthRests;ones(nt_iti(i),1).*iti(i)];
+% check rests
+if sum((size(numRests)~=size(lengthRests)))>0
+    error('pp1_maketgt: Please check numRests and lengthRests- should be same size')
 end
-lengthRests = sample_wor(lengthRests,numTrials-1,1); 
-lengthRests = [0;lengthRests];
+
+numConds = length(chordNum);
+
+%- - - - - - -
+% make rest vecotr
+%- - - - - - -
+if (length(numRests)==1)
+    lengthRests=ones(numRests,1)*lengthRests; 
+else
+    lrests      = lengthRests;
+    lengthRests = [];
+    for i = 1:length(lrests)
+        lengthRests = [lengthRests, ones([1,numRests(i)]).*lrests(:,i)];
+    end        
+    numRests = sum(numRests);
+end; 
+% randomly order rests
+lengthRests=lengthRests(randperm(numRests)); 
+% determine where rests will be in tgt file (ensure rest is not before
+% first trial)
+atStart = 1;
+while atStart
+    % assign rest before these trials:
+    rests = sort(sample_wor([1:(numReps*numConds)]',numRests,1)); 
+    % check that rest is not assigned before the first trial:
+    if isempty(find(rests==1, 1)); atStart=0; end
+end
 
 %- - - - - - -
 % make trial vector
 %- - - - - - -
 trials = repmat(chordNum,1,numReps);                   % sequential trial list
-trials = sample_wor(trials',numTrials,1);       % pseudorandomize trial order
+trials = sample_wor(trials',numReps*numConds,1);       % pseudorandomize trial order
 % determine which trials will have false chord presentations presented at
 % response window. Ensure that only one trial for chord conditions are choosen. 
 sameChord = 1;
 while sameChord 
     % get randomly selected trials
-    falseIdx = sample_wor(1:numTrials,numFalse,1);
+    falseIdx = sample_wor(1:numReps*numConds,numFalse,1);
     % check no condition appears twice in false trials
     sameChord = pdist([trials(falseIdx)],@(x,y) x-y) == 0;
 end
-falseCue = zeros(numTrials,1);
+falseCue = zeros(numReps*numConds,1);
 falseCue(falseIdx) = 1;
 
-%- - - - - - -
+%-
 % set stimulation chords
-%- - - - - - -
+%-
 chords = [1 0 0 0 0; 0 1 0 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1;...             % singles            5
           1 1 0 0 0; 1 0 1 0 0; 1 0 0 1 0; 1 0 0 0 1;...                        % doubles (thumb)    4
           0 1 1 0 0; 0 1 0 1 0; 0 1 0 0 1;...                                   % doubles            3
@@ -74,11 +85,16 @@ chords = [1 0 0 0 0; 0 1 0 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1;...             
 %- - - - - - -
 T = [];            % output target structure
 x = dummyscans+1;  % set the TR counter to the first TR we start at (used to calculate timing)
+r = 1;             % rest counter (used to index values in rest vector)
 trialTime = cueTime + stimTime + respTime + fbTime;
-for n=1:numTrials
+for n=1:length(trials) 
     % (1) determine trial timing
-    % determine start time
-    x = x + lengthRests(n)/TR; % compensate for rest with TR counter (first trial is zero iti before)
+    % adding rest time before this collection of movements? (not before first trial)
+    if (isincluded(rests,n))
+       if n==1; error('rest before first trial'); end
+       x = x + lengthRests(r)/TR; % compensate for rest with TR counter
+       r = r + 1; 
+    end;     
     t.startTime = (x-1)*TR; 
     t.startTR   = x;
     t.endTime   = t.startTime + trialTime;
@@ -116,6 +132,6 @@ for n=1:numTrials
     
     T = addstruct(T,t); 
     % update TR counter
-    x = x + (trialTime)/TR;
+    x = x + (trialTime + ITI)/TR;
 end; 
 varargout={T}; 
