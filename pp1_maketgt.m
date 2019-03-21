@@ -1,9 +1,9 @@
-function varargout=pp1_maketgt(varargin); 
-numStim     = 5;        % number of stimulations per trial
+function varargout=pp1_maketgt(varargin) 
+numStim     = 2;        % number of stimulations per trial
 numReps     = 2;        % repetitions per chord
 chordNum    = 1:31;     % 1:5 are flexion, 6:10 are extension
-forceN      = 3;        % force applied to stimulated finger
-numFalse    = 5;        % number of incorrect chord presentations
+forceN      = 2;        % force applied to stimulated finger
+numFalse    = 3;        % number of incorrect chord presentations
 cueTime     = 500;      % ms
 stimTime    = 4000;     % time for finger stimulation (in ms)
 respTime    = 1500;     % time to wait for chord response (in ms)
@@ -20,9 +20,9 @@ numTrials = numReps*numConds;
 %- - - - - - -
 % determine random rest itis
 %- - - - - - -
-iti         = [1:1.5:15].*1000;                 % variable inter-trial-interval duration (in ms)
+iti         = [1:1.5:10].*1000;                 % variable inter-trial-interval duration (in ms)
 niti        = numel(iti);                       % how many iti types
-prb         = geopdf(1:niti, .3);               % geometric probability distribution function with p = 0.3
+prb         = geopdf(1:niti, .35);               % geometric probability distribution function with p = 0.3
 pct         = prb./sum(prb);                    % proportion of trials per ITI type 
 nt_iti      = round(numTrials * pct);  % how many trials per ITI type
 % correcting because rest itis are between trials, so num itis = numTrials-1
