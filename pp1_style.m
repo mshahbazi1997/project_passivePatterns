@@ -17,30 +17,17 @@ switch(styID)
     case 'default'
         colours                 = {'black','lightgray'};
         opt.display.ax          = 'normal';
-    case '5shades'
-        colours                 = {'black','maroon','medred','orange','yellow'};
-        canvas                  = 'blackonwhite';
-        opt.general.markertype  = 'o';
+    case '5fingers'
+        colours                 = {[0.2 0.14 0.53] [0.29 0.49 0.36] [0.97 0 0] [0 0.58 0.77] [0.8 0.27 0.5]};
+        opt.display.ax          = 'normal';
+        opt.hist.facealpha      = 0.4;
         opt.general.markersize  = 6;
-        opt.dot.facealpha       = 0.7;
-        opt.dot.edgealpha       = 1;
-        opt.dot.sizedata        = 40;
-        opt.dot.gapwidth        = [1 1 1 1];
-    case '5shadesNoMarkers'
-        colours                 = {'black','maroon','medred','orange','yellow'};
-        canvas                  = 'blackonwhite';
-        opt.general.markertype  = 'none';  
-    case '1black'
-        %colours                 = {'black'};
-        colours                 = plt.helper.get_shades(6,'gray','decrease',10);
-        canvas                  = 'blackonwhite';
-        %opt.general.markerfill = {[0 0 0],[0 0 0],[0 0 0],[0 0 0],[0 0 0],[0 0 0]};
-        opt.general.markertype  = 'o';
+        opt.general.linewidth   = 1.3;
+    case 'numDigits'
+        colours                 = {[0 0 0] [0.5 0 0] [0.9 0 0] [1 0.6 0] [0 0 0]};
+        opt.display.ax          = 'normal';
+        opt.hist.facealpha      = 0.4;
         opt.general.markersize  = 6;
-        opt.dot.facealpha       = 0.7;
-        opt.dot.edgealpha       = 1;
-        opt.dot.sizedata        = 40;
-        opt.dot.gapwidth        = [1 0.75 1 1];
-
+        opt.general.linewidth   = 1.3;
 end;
 
