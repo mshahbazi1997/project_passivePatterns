@@ -142,7 +142,7 @@ loc_AC     = {[-78  -122 -126],...
               [-80 -128 -133],...
               [-80 -122 -123],...
               [-82 -116 -132],...
-              []};
+              [-81 -120 -135]};
           
 DicomName{1}  = {'2019_03_01_PD01.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_12_pd02_sess1.MR.Diedrichsen_PassivePatterns',...
@@ -262,12 +262,12 @@ switch(what)
         CAT.markertype  = 'o';
         CAT.markersize  = 7;
         % do plot
-        scatterplot3(Y(1:end,1),Y(1:end,2),Y(1:end,3),'split',split,'label',label,'CAT',CAT);
+        scatterplot3(Y(1:31,1),Y(1:31,2),Y(1:31,3),'split',split,'label',label,'CAT',CAT);
         % link the single digit chords for clarification
         indx=[1:5 1]';
         line(Y(indx,1),Y(indx,2),Y(indx,3),'color',color{1});
 
-        if (size(Y,1)==32) % foot regressor/error regressor
+        if (size(Y,1)==32) % thumb response
             hold on;
             plot3(Y(32,1),Y(32,2),Y(32,3),'o','MarkerFaceColor',[0 0.8 0],'MarkerEdgeColor',[0 0.8 0]);
             hold off;
@@ -796,16 +796,15 @@ switch(what)
     case 'PREP_moveData'                                                   
         % Moves image data from imaging_dicom_raw into a "working dir":
         % imaging_dicom.
-        vararginoptions(varargin,{'sn'});
+        postfx = 'realignVDM';
+        vararginoptions(varargin,{'sn','postfx'});
         prefix = dataPrefix{sn};
-        postfx = '_realignVDM';
-        %postfx = '_realignVDM';
         % check target output directory exists
         destDir = fullfile(baseDir, 'imaging_data',subj_name{sn});
         dircheck(destDir);
         % get filenames to copy and where to copy
         for q = 1:numel(run)
-            sourceDir = fullfile(baseDir, 'imaging_data_raw',subj_name{sn},sprintf('sess_%02d%s',q,postfx));
+            sourceDir = fullfile(baseDir, 'imaging_data_raw',subj_name{sn},sprintf('sess_%02d_%s',q,postfx));
             for r = (run{q}{sn})
                 % copy 4d niftis
                 source = fullfile(sourceDir, sprintf('%s%s_run_%02d.nii',prefix,subj_name{sn},r));
@@ -820,9 +819,9 @@ switch(what)
         end % session
         % copy mean epi img (from sess_01 raw data dir)
         if strcmp(prefix,'u') % fieldmap vs. affine alignment have different naming conventions
-            source = fullfile(imagingDirRaw,subj_name{sn},['sess_01' postfx], sprintf('mean%s%s_run_01.nii',prefix,subj_name{sn}));
+            source = fullfile(imagingDirRaw,subj_name{sn},['sess_01_' postfx], sprintf('mean%s%s_run_01.nii',prefix,subj_name{sn}));
         elseif strcmp(prefix,'r')
-            source = fullfile(imagingDirRaw,subj_name{sn},['sess_01' postfx], sprintf('mean%s_run_01.nii',subj_name{sn}));
+            source = fullfile(imagingDirRaw,subj_name{sn},['sess_01_' postfx], sprintf('mean%s_run_01.nii',subj_name{sn}));
         end
         dest   = fullfile(destDir, sprintf('%smeanepi_%s.nii',prefix,subj_name{sn}));
         copyfile(source,dest);
@@ -1414,9 +1413,13 @@ switch(what)
                 pp1_imana('GLM_estimate','sn',s,'glm',g);
                 if g==1
                     pp1_imana('GLM_contrastglm1','sn',s);
-                elseif g==2
-                    pp1_imana('GLM_contrastglm2','sn',s);
-                    pp1_imana('PSC_calcImgsglm2','sn',s);
+                elseif g>1
+                    if g==2
+                        pp1_imana('GLM_contrastglm2','sn',s);
+                    elseif g==3
+                        pp1_imana('GLM_contrastglm3','sn',s);
+                    end
+                    pp1_imana('PSC_calcChord','sn',s,'glm',g);
                 end
             end
         end
@@ -1431,7 +1434,7 @@ switch(what)
         T			 = [];
         % Gather appropriate GLM presets.
         [~,d_hrf]      = spm_hrf(TR_length); % default hrf params
-        subj_hrfParams = {[1.7157 5.1929 d_hrf(3) d_hrf(4) -0.2216 d_hrf(6) d_hrf(7)],... % subject-specific hrf params (estimated from glm1)
+        subj_hrfParams = {[3.6873 11.893 d_hrf(3) d_hrf(4) 0.23299 d_hrf(6) d_hrf(7)],... % subject-specific hrf params (estimated from glm1)
                           [5.5018 15.717 d_hrf(3) d_hrf(4) 6.2265 d_hrf(6) d_hrf(7)],...
                           [4.986  15.452 d_hrf(3) d_hrf(4) 6.1327 d_hrf(6) d_hrf(7)],...
                           [5.0097 16.379 d_hrf(3) d_hrf(4) 5.6836 d_hrf(6) d_hrf(7)]};
@@ -1575,12 +1578,12 @@ switch(what)
         spm_rwls_spm(SPM);
         % for checking -returns img of head movements and corrected sd vals
         % spm_rwls_resstats(SPM)
-    case 'GLM_contrastglm4'                                                 % STEP 3.3   :  Make t-stat contrasts for specified GLM estimates.
-        % Make t-stat contrasts for specified GLM estimates.
+    case 'GLM_contrastglm1'
+        % Make t-stat contrasts for single task regressor (localizer)
         % enter sn, glm #
-        % models each chord and also error trials
+        % 1: task vs. rests
         vararginoptions(varargin,{'sn'});
-        glm = 4;
+        glm = 1;
         cwd = pwd;
         % Go to subject's directory
         cd(fullfile(glmDir{glm}, subj_name{sn}));
@@ -1588,52 +1591,12 @@ switch(what)
         SPM = rmfield(SPM,'xCon');
         T   = load('SPM_info.mat');
 
-        %_____t contrast for chords
-        for d = 1:32
-            con                = zeros(1,size(SPM.xX.X,2));
-            con(:,T.tt==d)     = 1;
-            con                = con/sum(con);
-            SPM.xCon(d)        = spm_FcUtil('Set',sprintf('chord_%d',d), 'T', 'c',con',SPM.xX.xKXs);
-        end;
+        con                = zeros(1,size(SPM.xX.X,2));
+        con(:,T.tt>0)      = 1;
+        con                = con/sum(con);
+        SPM.xCon(1)        = spm_FcUtil('Set','task', 'T', 'c',con',SPM.xX.xKXs);
 
-        %_____t contrast overall chords
-        con                    = zeros(1,size(SPM.xX.X,2));
-        con(:,T.tt<32)         = 1;
-        con                    = con/sum(con);
-        SPM.xCon(33)           = spm_FcUtil('Set',sprintf('overall'), 'T', 'c',con',SPM.xX.xKXs);
-
-        %____do the constrasts
-        SPM = spm_contrasts(SPM,[1:length(SPM.xCon)]);
-        save('SPM.mat','SPM');
-        cd(cwd);
-    case 'GLM_contrastglm3'                                                 % STEP 3.3   :  Make t-stat contrasts for specified GLM estimates.
-        % Make t-stat contrasts for specified GLM estimates.
-        % enter sn, glm #
-        % models each chord and also error trials
-        vararginoptions(varargin,{'sn'});
-        glm = 3;
-        cwd = pwd;
-        % Go to subject's directory
-        cd(fullfile(glmDir{glm}, subj_name{sn}));
-        load SPM;
-        SPM = rmfield(SPM,'xCon');
-        T   = load('SPM_info.mat');
-
-        %_____t contrast for chords
-        for d = 1:32
-            con                = zeros(1,size(SPM.xX.X,2));
-            con(:,T.tt==d & T.incl==1) = 1;
-            con                = con/sum(con);
-            SPM.xCon(d)        = spm_FcUtil('Set',sprintf('chord_%d',d), 'T', 'c',con',SPM.xX.xKXs);
-        end;
-
-        %_____t contrast overall chords
-        con                    = zeros(1,size(SPM.xX.X,2));
-        con(:,T.tt>0 & T.incl==1) = 1;
-        con                    = con/sum(con);
-        SPM.xCon(33)           = spm_FcUtil('Set',sprintf('overall'), 'T', 'c',con',SPM.xX.xKXs);
-
-        %____do the constrasts
+        %____do the constrast
         SPM = spm_contrasts(SPM,[1:length(SPM.xCon)]);
         save('SPM.mat','SPM');
         cd(cwd);
@@ -1668,72 +1631,49 @@ switch(what)
         SPM = spm_contrasts(SPM,[1:length(SPM.xCon)]);
         save('SPM.mat','SPM');
         cd(cwd);
-    case 'GLM_contrastglm1'
-        % Make t-stat contrasts for single task regressor (localizer)
+    case 'GLM_contrastglm3'                                                 % STEP 3.3   :  Make t-stat contrasts for specified GLM estimates.
+        % Make t-stat contrasts for specified GLM estimates.
         % enter sn, glm #
-        % 1: task vs. rests
+        % models each chord and also error trials
         vararginoptions(varargin,{'sn'});
-        glm = 1;
-        cwd = pwd;
+        glm = 3;
         % Go to subject's directory
         cd(fullfile(glmDir{glm}, subj_name{sn}));
         load SPM;
         SPM = rmfield(SPM,'xCon');
         T   = load('SPM_info.mat');
+        %_____t contrast for chords & thumb movement
+        for d = 1:32
+            con               = zeros(1,size(SPM.xX.X,2));
+            con(:,T.chord==d) = 1;
+            con               = con/sum(con);
+            if d<32 % chords
+                SPM.xCon(d) = spm_FcUtil('Set',sprintf('chord_%d',d), 'T', 'c',con',SPM.xX.xKXs);
+            else % thumb movement
+                SPM.xCon(d) = spm_FcUtil('Set','thumb_response', 'T', 'c',con',SPM.xX.xKXs);
+            end
+        end
 
-        con                = zeros(1,size(SPM.xX.X,2));
-        con(:,T.tt>0)      = 1;
-        con                = con/sum(con);
-        SPM.xCon(1)        = spm_FcUtil('Set','task', 'T', 'c',con',SPM.xX.xKXs);
+        %_____t contrast overall chords
+        con                    = zeros(1,size(SPM.xX.X,2));
+        con(:,T.chord>0 & T.chord<32) = 1;
+        con                    = con/sum(con);
+        SPM.xCon(33)           = spm_FcUtil('Set',sprintf('overall'), 'T', 'c',con',SPM.xX.xKXs);
 
-        %____do the constrast
+        %____do the constrasts
         SPM = spm_contrasts(SPM,[1:length(SPM.xCon)]);
         save('SPM.mat','SPM');
-        cd(cwd);
-    case 'PSC_calcImgsglm4'                                                     % calculates % signal change for digits of both trial types vs. rest (based on betas/baseline in each run)
+    case 'PSC_calcChord'                                                    % calculates % signal change for chords
         % calculate psc for all digits vs. rest - based on betas from glm 1    
         sn  = 1;
-        vararginoptions(varargin,{'sn'});
-        
-        glm = 4;
-        
-        for s=sn
-            cd(fullfile(glmDir{glm}, subj_name{s}));
-            load SPM;
-            T = load('SPM_info.mat');
-            X = (SPM.xX.X(:,SPM.xX.iC));      % Design matrix - raw
-            h = median(max(X));               % Height of response is defined as median of max regressor height (across conds and runs) for this subject
-            P = {};                           % Filenames of input images
-            numB = length(SPM.xX.iB);         % Partitions - runs
-            for p = SPM.xX.iB
-                P{end+1} = sprintf('beta_%4.4d.nii',p);       % get the intercepts (for each run) and use them to calculate the baseline (mean images) * max height of design matrix regressor
-            end;
-            for con=1:31   % 31 chords
-                P{numB+1}=sprintf('con_%04d.nii',con);
-                outname=sprintf('psc_%02d.nii',con); % ,subj_name{s}
-                formula = '100.*%f.*i%1.0f./((';
-                for i = 1:numB
-                    if i~=numB
-                        fadd = sprintf('i%1.0f+',i);
-                    else
-                        fadd = sprintf('i%1.0f)/',i);
-                    end
-                    formula = [formula fadd];
-                end
-                formula = [formula num2str(numB) ')'];
-                formula = sprintf(formula,h,numB+1);
-
-                spm_imcalc(P,outname,formula,{0,[],spm_type(16),[]});        % Calculate percent signal change
-            end;
-            fprintf('Subject %d: %3.3f\n',s,h);
-        end;
-    case 'PSC_calcImgsglm2'                                                     % calculates % signal change for digits of both trial types vs. rest (based on betas/baseline in each run)
-        % calculate psc for all digits vs. rest - based on betas from glm 1    
-        sn  = 1;
-        vararginoptions(varargin,{'sn'});
-        
         glm = 2;
-        
+        vararginoptions(varargin,{'sn','glm'});
+        if glm==2
+            numImgs = 31;
+        elseif glm==3
+            numImgs = 32;
+        end
+        % assumes first 31 contrasts are for the chords
         for s=sn
             cd(fullfile(glmDir{glm}, subj_name{s}));
             load SPM;
@@ -1744,11 +1684,12 @@ switch(what)
             numB = length(SPM.xX.iB);         % Partitions - runs
             for p = SPM.xX.iB
                 P{end+1} = sprintf('beta_%4.4d.nii',p);       % get the intercepts (for each run) and use them to calculate the baseline (mean images) * max height of design matrix regressor
-            end;
-            for con=1:31   % 31 chords
-                P{numB+1}=sprintf('con_%04d.nii',con);
-                outname=sprintf('psc_%02d.nii',con); % ,subj_name{s}
-                formula = '100.*%f.*i%1.0f./((';
+            end
+            for con = 1:numImgs   % 31 chords + other regressors 
+                P{numB+1} = sprintf('con_%04d.nii',con);
+                outname   = sprintf('psc_%02d.nii',con); % ,subj_name{s}
+                formula   = '100.*%f.*i%1.0f./((';
+                % construct formula dynamically incase numRuns changes
                 for i = 1:numB
                     if i~=numB
                         fadd = sprintf('i%1.0f+',i);
@@ -1761,65 +1702,9 @@ switch(what)
                 formula = sprintf(formula,h,numB+1);
 
                 spm_imcalc_ui(P,outname,formula,{0,[],spm_type(16),[]});        % Calculate percent signal change
-            end;
-            fprintf('Subject %d: %3.3f\n',s,h);
-        end;
-    case 'PSC_calcImgsglm3'                                                     % calculates % signal change for digits of both trial types vs. rest (based on betas/baseline in each run)
-        % calculate psc for all digits vs. rest - based on betas from glm 3
-        % Skips over data from runs where all trials of a certain task type
-        % were modeled as errors.
-        sn  = 1;
-        vararginoptions(varargin,{'sn'});
-        
-        glm = 3;
-        
-        for s=sn
-            cd(fullfile(glmDir{glm}, subj_name{s}));
-            load SPM;
-            T = load('SPM_info.mat');
-            X = (SPM.xX.X(:,SPM.xX.iC));      % Design matrix - raw
-            h = median(max(X));               % Height of response is defined as median of max regressor height (across conds and runs) for this subject
-            P = {};                           % Filenames of input images
-            numB = length(SPM.xX.iB);         % Partitions - runs
-            for p = SPM.xX.iB
-                P{end+1} = sprintf('beta_%4.4d.nii',p);       % get the intercepts (for each run) and use them to calculate the baseline (mean images) * max height of design matrix regressor
             end
-            for con=1:32   % 31 chords + error regressor
-                ii = 1;
-                numMissing = 0;
-                P{numB+1}=sprintf('con_%04d.nii',con);
-                outname=sprintf('psc_%02d.nii',con); % ,subj_name{s}
-                formula = '100.*%f.*i%1.0f./((';
-                for i = 1:numB
-%                     if ~T.incl(logical(T.run==i & T.tt==con))
-%                         keyboard
-%                     end
-                    
-                    if i==1 && T.incl(logical(T.run==i & T.tt==con)) % first run and modeled as task
-                        fadd = sprintf('i%1.0f',i);
-                        ii = ii+1;
-                    elseif i~=numB && T.incl(logical(T.run==i & T.tt==con)) % subsequent runs and modeled as task
-                        fadd = sprintf('+i%1.0f',i);
-                        ii = ii+1;
-                    elseif i==numB && T.incl(logical(T.run==i & T.tt==con)) % last run and modeled as task
-                        fadd = sprintf('+i%1.0f)/',i);
-                        ii = ii+1;
-                    elseif i==numB && ~T.incl(logical(T.run==i & T.tt==con)) % last run and not modeled as task
-                        fadd = '/';
-                    else
-                        fadd = '';
-                        ii = ii+1;
-                        numMissing = numMissing +1;
-                    end
-                    formula = [formula fadd];
-                end
-                formula = [formula num2str(ii-1-numMissing) ')'];
-                formula = sprintf(formula,h,ii);
-
-                spm_imcalc(P,outname,formula,{0,[],spm_type(16),[]});        % Calculate percent signal change
-            end;
             fprintf('Subject %d: %3.3f\n',s,h);
-        end;
+        end
         
     case '0' % ------------ SEARCH: searchlight analyses. Expand for more info.  REQUIRES FURTHER EDITING in group_cSPM (editing for comments on what is happening)!!!
         % The SEARCH cases are used to conduct surface-searchlight analyses 
@@ -2495,9 +2380,9 @@ switch(what)
                 for u=1:length(SPM.Sess(r).U)
                     SPM.Sess(r).U(u).dur = ones(size(SPM.Sess(r).U(u).dur))*duration; % 1
                     SPM.Sess(r).U(u).ons = SPM.Sess(r).U(u).ons+onsetshift; % return to TR at announce trial
-                end;
+                end
                 SPM.Sess(r).U=spm_get_ons(SPM,r);
-            end;
+            end
             % loop through rois for subject
             for r = roi
                 fprintf('%s\n',R{r}.name);
@@ -2540,11 +2425,11 @@ switch(what)
                 D = spmj_get_ons_struct(SPM);
                 y_hat = mean(Yhat,2);
                 y_res = mean(Yres,2);
-                for i=1:size(D.block,1);
+                for i=1:size(D.block,1)
                     D.y_hat(i,:)=cut(y_hat,pre,round(D.ons(i)),post,'padding','nan')';
                     D.y_res(i,:)=cut(y_res,pre,round(D.ons(i)),post,'padding','nan')';
                     D.y_adj(i,:)=D.y_hat(i,:)+D.y_res(i,:);
-                end;
+                end
                 D.regType   = ones(size(D.event,1),1)*r;
                 D.regSide   = ones(size(D.event,1),1)*hemi;
                 D.sn        = ones(size(D.event,1),1)*s;
@@ -2574,7 +2459,7 @@ switch(what)
         %         save(fullfile(regDir,sprintf('ROI_timeseries_fit_%d_%d.mat',glm_num{glm},fithrf)),'T','Ts');
         %
         %         varargout = {T,Ts};
-    case 'ROI_plotTimeseriesAvg'                                               % (optional) :  Plots timeseries for specified region (avg. across digits, separated by pressing speed)
+    case 'ROI_plotTimeseriesAvg'                                            % (optional) :  Plots timeseries for specified region (avg. across digits, separated by pressing speed)
         glm = 1;
         sn  = 1;
         roi = 5;
@@ -2669,7 +2554,7 @@ switch(what)
         
         
         %__________________________________________________________________
-    case 'ROI_plotTimeseriesCond'                                               % (optional) :  Plots timeseries for specified region (avg. across digits, separated by pressing speed)
+    case 'ROI_plotTimeseriesCond'                                           % (optional) :  Plots timeseries for specified region (avg. across digits, separated by pressing speed)
         glm = 1;
         sn  = 1;
         roi = 5;
@@ -2729,14 +2614,22 @@ switch(what)
             
             % add percent signal change imgs for subject
             Q = {}; 
-            for q = 1:31; Q{q} = (fullfile(glmDir{glm}, subj_name{s}, sprintf('psc_%02d.nii',q))); end
+            if glm==2
+                numImgs = 31; 
+            elseif glm==3
+                numImgs = 32; 
+            end
+            for q = 1:numImgs
+                Q{q} = (fullfile(glmDir{glm}, subj_name{s}, sprintf('psc_%02d.nii',q))); 
+            end
             Q = spm_vol(char(Q));
             
             % TR img info
             V = SPM.xY.VY; 
-            
+
             % remove run means from patterns
             C0   = indicatorMatrix('identity',D.run); 
+            ofInterest = 1:size(C0,1); % indicies for regressors of interest
             
             for r = roi % for each region
                 % get raw data/psc for voxels in region
@@ -2754,15 +2647,17 @@ switch(what)
                 S.tt                 = {D.tt};
                 S.run                = {D.run};
                 S.numDigits          = {D.numDigits};
-                % betas
+                % remove nuisance regressor betas
                 betaUW               = bsxfun(@rdivide,beta,sqrt(resMS));
-                betaUW               = betaUW(1:size(C0,1),:);  % remove nuisance regressors
-                betaW                = betaW(1:size(C0,1),:);
+                betaUW               = betaUW(ofInterest,:);
+                betaW                = betaW(ofInterest,:);
+                raw_beta             = beta(ofInterest,:);
+                % add data to output structure
                 S.betaW_noRunMean    = {betaW-C0*pinv(C0)*betaW};
                 S.betaUW_noRunMean   = {betaUW-C0*pinv(C0)*betaUW};
                 S.betaW              = {betaW};        
                 S.betaUW             = {betaUW};  
-                S.raw_beta           = {beta};
+                S.raw_beta           = {raw_beta};
                 S.psc                = {P};
                 S.resMS              = {resMS};
                 S.xyzcoord           = {R{r}.data'}; % excl already applied
@@ -2778,61 +2673,55 @@ switch(what)
     case 'ROI_stats'                                                        % STEP 5.4   :  Calculate stats/distances on activity patterns
         glm = 2;
         sn  = 1;
-        %roi = [1:24];
         vararginoptions(varargin,{'sn','glm'});
-        
-        T = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm))); % loads region data (T)
-        roi = unique(T.roi)';
-        
+        % housekeeping
         numDigits = stimulationChords;
         numDigits = sum(numDigits,2)';
-        
+        if glm==2 % 32 chords
+            numConds = 31;
+        elseif glm==3 % 31 chords + thumb response regressor
+            numConds = 32;
+        end
         % output structures
         To = [];
         Td = [];
-        
-        if glm==2
-            numConds = 31;
-        elseif glm==3
-            numConds = 32;
-        elseif glm==4 % 31 chords and 1 error regressor
-            numConds = 32; %31 chords and 1 foot regressor
-        end
-        
+        % get data
+        T   = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm))); % loads region data (T)
+        roi = unique(T.roi)';
         % do stats
         for s = sn % for each subject
-            D = load(fullfile(glmDir{glm}, subj_name{s}, 'SPM_info.mat'));   % load subject's trial structure
-            C0  = indicatorMatrix('identity',D.run);
+            D  = load(fullfile(glmDir{glm}, subj_name{s}, 'SPM_info.mat'));   % load subject's trial structure
+            C0 = indicatorMatrix('identity',D.run);
             fprintf('\nSubject: %d\n',s)
             num_run = length(unique(D.run));
+            ofInterest = 1:(numConds*num_run); % indicies for regressors of interest
             
             for r = roi % for each region
                 S = getrow(T,(T.sn==s & T.roi==r)); % subject's region data
-                fprintf('%d.',r)
                 betaW       = S.betaW{1}; 
-                betaW_nmean = betaW(1:(numConds*num_run),:)-C0*pinv(C0)*betaW(1:(numConds*num_run),:); % run mean subtraction  
-                %beta   = S.beta{1}(:,L_indx);
+                betaW_nmean = betaW(ofInterest,:)-C0*pinv(C0)*betaW(ofInterest,:); % run mean subtraction  
                 % % Toverall structure stats
                 % crossval second moment matrix
-                [G,Sig]      = pcm_estGCrossval(betaW_nmean(1:(numConds*num_run),:),D.run,D.tt);
-                So.G         = rsa_vectorizeIPM(G);
-                So.G_wmean   = rsa_vectorizeIPM(pcm_estGCrossval(betaW(1:(numConds*num_run),:),D.run,D.tt));
+                [G,Sig]      = pcm_estGCrossval(betaW_nmean(ofInterest,:),D.run,D.tt);
                 So.sig       = rsa_vectorizeIPM(Sig);
+                So.G         = rsa_vectorizeIPM(G);
+                So.G_wmean   = rsa_vectorizeIPM(pcm_estGCrossval(betaW(ofInterest,:),D.run,D.tt));
                 % squared dissimilarities
                 So.ldc_wmean = rsa.distanceLDC(betaW,D.run,D.tt);        % rdm crossvalidated, on patterns without run mean patterns removed
                 So.ldc       = rsa.distanceLDC(betaW_nmean,D.run,D.tt);  % rdm crossvalidated, patterns with run means removed
-                %So.corr_dist = corr_crossval(pcm_makePD(G)); 
-                %So.cos_dist = cosineDistCrossval(betaW_nmean,D.run,D.tt);
-                %So.rdm_nocv = distance_euclidean(betaW_nmean',D.tt)';   % rdm no CV, on patterns with run means removed
                 % PSC
                 So.psc       = nanmean(S.psc{1},2)';
-                So.psc_chord = [1:31]; % no error/foot imgs calculated for psc
-                So.psc_numD  = numDigits;
-                % Calculate avg. betas for each condition + intercepts
+                if glm==2 % only regressors for chords
+                    So.psc_chord = [1:31]; 
+                    So.psc_numD  = numDigits;
+                elseif glm==3 % regressors for chords and thumb response
+                    So.psc_chord = [1:32]; 
+                    So.psc_numD  = [numDigits,99];
+                end
+                % Calculate avg. betas for each condition
                 Q                       = [];
                 Q.raw_beta              = S.raw_beta{1};
                 Q.tt                    = D.tt;
-                Q.tt(end+1:end+num_run) = numConds +1; % intercept betas
                 Q                       = tapply(Q,{'tt'},{'raw_beta','mean'});
                 So.avg_betas            = mean(Q.raw_beta,2)';
                 So.avg_tt               = Q.tt';
@@ -2843,7 +2732,6 @@ switch(what)
                 So.regSide  = regSide(r);
                 So.regType  = regType(r);
                 To          = addstruct(To,So);
-
                 % calc avg. chord patterns for each number of digits 
                 d           = [];
                 d.betaW     = betaW_nmean;
@@ -2857,24 +2745,22 @@ switch(what)
                 d           = tapply(d,{'numDigits','run','roi'},{'betaW','mean'});
                 d           = addstruct(d,d5);
                 d           = rmfield(d,{'chord'});
-                %dg = pcm_estGCrossval(d.betaW,d.run,d.numDigits);
                 % calc distance between avg patterns for 1 finger up to
                 % 5 finger chords:
                 td.ldc = rsa.distanceLDC(d.betaW,d.run,d.numDigits)';
-                %td.corr_dist = corr_crossval(pcm_makePD(dg))';
-                %td.cos_dist  = cosineDistCrossval(d.betaW,d.run,d.numDigits)';
                 td.distPair  = [1:10]';
                 td.digitDiff = [1;2;3;4;1;2;3;1;2;1];
                 td.roi       = ones(10,1).*r;
                 td.sn        = ones(10,1).*s;
                 Td           = addstruct(Td,td);
+                fprintf('%d.',r)
             end % each region
         end % each subject
 
         % % save
         save(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)),'-struct','To');
         save(fullfile(regDir,sprintf('glm%d_reg_TnumDigits.mat',glm)),'-struct','Td');
-        fprintf('\nDone.\n')
+        fprintf('done.\n')
    
     case 'ROI_pattConsist'                                                  % (optional) :  Calculates pattern consistencies for each subject in roi across glms.
         % Pattern consistency is a measure of the proportion of explained
@@ -3563,23 +3449,23 @@ switch(what)
         
         D = [];
         d = [];
-        v = ones(31,1);
-        for i = 1:size(T.sn,1);
-            d.psc = T.psc(i,:)';
-            d.chord = T.psc_chord(i,:)';
+        v = ones(size(T.psc,2),1);
+        for i = 1:size(T.sn,1)
+            d.psc       = T.psc(i,:)';
+            d.chord     = T.psc_chord(i,:)';
             d.numDigits = T.psc_numD(i,:)';
-            d.roi   = v.*T.roi(i);
-            d.sn    = v.*T.sn(i);
+            d.roi       = v.*T.roi(i);
+            d.sn        = v.*T.sn(i);
             D = addstruct(D,d);
             d = [];
         end
-        
-        style.use('numDigits');
+        %D  = getrow(D,D.numDigits<6);
         Dr = tapply(D,{'sn','roi','numDigits'},{'psc','mean'});
         Dr = getrow(Dr,ismember(Dr.roi,roi) & ismember(Dr.sn,sn));
         % plot
         if isempty(fig); figure('Color',[1 1 1]); else fig; end
-        plt.dot([Dr.roi Dr.numDigits],Dr.psc,'split',Dr.numDigits);
+        style.use('numDigits');
+        plt.box([Dr.roi Dr.numDigits],Dr.psc,'split',Dr.numDigits);
         xtick = {};
         for r = roi
             xtick = {xtick{:} '','',reg_title{r},'',''};
@@ -3743,28 +3629,19 @@ switch(what)
         M.numGparams = 4;
         %M.theta0     = [];
         varargout = {M};
-    
-        
+      
     case 'PCM_getData'
         % Get betas for roi from subjects in PCM-friendly format.
         % Betas do not have run means removed.
         sn  = 1;
         glm = 2;
         roi = 5; % only one roi supported
-        betaType = 'mlt'; 
-        vararginoptions(varargin,{'sn','glm','roi','betaType'});
+        vararginoptions(varargin,{'sn','glm','roi'});
         if length(roi)>1
             error('only 1 roi supported per call to case');
         end
-        switch betaType
-            case 'mlt'
-                fcn = 'b.betaW{1}';
-            case 'uni'
-                fcn = 'b.betaUW{1}';
-            case 'raw'
-                fcn = 'b.raw_beta{1}';
-        end
         % load betas
+        betaType = 'betaW'; % or betaUW, raw_beta
         B = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm)));
         B = getrow(B,B.roi==roi);
         % outputs
@@ -3772,11 +3649,18 @@ switch(what)
         partVec = {};
         condVec = {};
         for i = 1:length(sn)
+            % get subject data
             s = sn(i);
             b = getrow(B,B.sn==s);
-            Y{i} = eval(fcn);
-            partVec{i} = b.run{1};
-            condVec{i} = b.tt{1};
+            bb = [];
+            bb.run   = cell2mat(b.run);
+            bb.chord = cell2mat(b.tt);
+            eval(sprintf('bb.betas = cell2mat(b.%s);',betaType));
+            bb = getrow(bb,ismember(bb.chord,1:31)); % restrict to passive patterns only
+            % put subj data into pcm variables
+            Y{i}         = bb.betas;
+            partVec{i}   = bb.run;
+            condVec{i}   = bb.chord;
             G_hat(:,:,i) = pcm_estGCrossval(Y{i},partVec{i},condVec{i});
         end
         varargout = {Y,partVec,condVec,G_hat};
@@ -3787,12 +3671,10 @@ switch(what)
         roi    = 5;
         plotit = 0; % plot fits
         saveit = 0; % save fits
-        betaType = 'mlt';
         runEffect = 'random';
         vararginoptions(varargin,{'sn','glm','roi','plotit','saveit'});
-        
         % get data
-        [Y,partVec,condVec,G_hat] = pp1_imana('PCM_getData','sn',sn,'roi',roi,'glm',glm,'betaType',betaType);
+        [Y,partVec,condVec,G_hat] = pp1_imana('PCM_getData','sn',sn,'roi',roi,'glm',glm);
         G_hat = mean(G_hat,3);
         % get pcm models
         M{1} = pp1_imana('pcm_null');
@@ -3816,8 +3698,7 @@ switch(what)
         % fit models
         [T,theta_hat,G_pred] = pcm_fitModelGroup(Y,M,partVec,condVec,'runEffect',runEffect,'fitScale',1);
         [Tcv,theta_cv]       = pcm_fitModelGroupCrossval(Y,M,partVec,condVec,'runEffect',runEffect,'groupFit',theta_hat,'fitScale',1,'verbose',1);
-        
-        % plot
+        % plot fits?
         if plotit
             figure('Color',[1 1 1]);
             % plot fits
@@ -3830,8 +3711,7 @@ switch(what)
             imagesc(G_hat);
             title('G hat (subj avg.)');
         end
-        
-        % save
+        % save fits?
         if saveit
            outfile = fullfile(pcmDir,sprintf('pcmFits_glm%d_roi%d',glm,roi));
            save(outfile,'M','T','theta_hat','G_pred','Tcv','theta_cv'); 
@@ -3944,9 +3824,9 @@ switch(what)
         keyboard
         
     case 'PCM_addPatterns'
-        sn  = 2;
-        roi = 3;
-        glm = 2;
+        sn  = 1:4;
+        roi = 5;
+        glm = 3;
         vararginoptions(varargin,{'glm','roi','sn'});
         if length(sn)>1
             error('can only call for one subect');
@@ -3956,8 +3836,7 @@ switch(what)
             error('can only call for one glm');
         end
         % get data
-        chords    = pp1_simulations('chords');
-        [Y,partVec,condVec] = pp1_imana('PCM_getData','sn',sn,'roi',roi,'glm',glm,'betaType','mlt');
+        [Y,partVec,condVec] = pp1_imana('PCM_getData','sn',sn,'roi',roi,'glm',glm);
         t.y      = Y{1};
         t.part   = partVec{1};
         t.chords = condVec{1};
@@ -3966,15 +3845,16 @@ switch(what)
         t.sn        = ones(31,1).*sn;
         t.glm       = ones(31,1).*glm;
         t.roi       = ones(31,1).*roi;
+        chords      = pp1_simulations('chords');
         t.numDigits = sum(chords,2);
         % make patterns
         y = t.y(ismember(t.chords,1:5),:);
         t.yA = (y' * chords')'; % linearly scale
         varargout = {t};
     case 'PCM_plotPatterns'
-        sn  = [2:4];
-        roi = [1:4];
-        glm = 2;
+        sn  = 1:4;
+        roi = 1:4;
+        glm = 3;
         vararginoptions(varargin,{'glm','roi','sn'});
         T = [];
         for r = roi

@@ -24,7 +24,8 @@ switch(styID)
         opt.general.markersize  = 6;
         opt.general.linewidth   = 1.3;
     case 'numDigits'
-        colours                 = {[0 0 0] [0.5 0 0] [0.9 0 0] [1 0.6 0] [0 0 0]};
+        %colours                 = {[0 0 0] [0.5 0 0] [0.9 0 0] [1 0.6 0] [0 0 0]};
+        colours                 = {[0 0 0] [0.5 0 0] [0.9 0 0] [1 0.6 0] [0.4 0.4 0.4]};
         opt.display.ax          = 'normal';
         opt.hist.facealpha      = 0.4;
         opt.general.markersize  = 6;
