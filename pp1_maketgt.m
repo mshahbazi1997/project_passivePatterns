@@ -117,5 +117,6 @@ for n=1:numTrials
     T = addstruct(T,t); 
     % update TR counter
     x = x + (trialTime)/TR;
-end; 
+end
+T.endTime(end) = T.endTime(end) + 3000; % add some buffer seconds 
 varargout={T}; 

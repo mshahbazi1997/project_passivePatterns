@@ -77,16 +77,19 @@ numTRs     = {[410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410,410,410,410,410,410,410],...
+              [410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410]};  % total # of images per run (including dummies) per subj
 run{1}     = {[1:6],...
              [1:5],...
              [1:5],...
              [1:6],...
+             [1:5],...
              [1:5]};
 run{2}     = {[7:11],...
              [6:11],...
              [6:11],...
              [7:11],...
+             [6:11],...
              []};
 % ------------------------- ROI things ------------------------------------
 hem        = {'lh','rh'};                                                   % left & right hemi folder names/prefixes
@@ -134,61 +137,70 @@ hemName   = {'LeftHem','RightHem'};                                         % fr
 %   Step 2: open .nii file with MRIcron and manually find AC and read the xyz coordinate values
 %           (note: there values are not [0 0 0] in the MNI coordinate)
 %   Step 3: set those values into loc_AC (subtract from zero)
-subj_name  = {'pd01','pd02','s01','s02','s03'};
-numSess    = [2,2,2,2,1];
-anatNum{1} = {[],[40],[],[],[27:31]};
-anatNum{2} = {[],[],[29,32],[20:24],[]};
+subj_name  = {'pd01','pd02','s01','s02','s03','s04'};
+numSess    = [2,2,2,2,2,1];
+anatNum{1} = {[],[40],[],[],[27:31],[25:29]};
+anatNum{2} = {[],[],[29,32],[20:24],[],[]};
 loc_AC     = {[-78  -122 -126],...
               [-80 -128 -133],...
               [-80 -122 -123],...
               [-82 -116 -132],...
-              [-81 -120 -135]};
+              [-81 -120 -135],...
+              [-84 -112 -122]};
           
 DicomName{1}  = {'2019_03_01_PD01.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_12_pd02_sess1.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_26_PP1_S01.MR.Diedrichsen_PassivePatterns',...
                  '2019_04_15_S02_sess1.MR.Diedrichsen_PassivePatterns',...
-                 '2019_04_22_S03_Sess1.MR.Diedrichsen_PassivePatterns'};
+                 '2019_04_22_S03_Sess1.MR.Diedrichsen_PassivePatterns',...
+                 '2019_04_24_S04_Sess1.MR.Diedrichsen_PassivePatterns'};
 DicomName{2}  = {'2019_04_22_PD01_Sess2.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_13_pd02_sess2.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_28_PP1_S01_SESS2.MR.Diedrichsen_PassivePatterns',...
                  '2019_04_16_S02_sess2.MR.Diedrichsen_PassivePatterns',...
+                 '2019_04_24_S03_Sess2.MR.Diedrichsen_PassivePatterns',...
                  ''};
              
 NiiRawName{1} = {'2019_03_01_PD01',...
                  '2019_03_12_pd02_sess1',...
                  '2019_03_26_PP1_S01',...
                  '2019_04_15_S02_sess1',...
-                 '2019_04_22_S03_Sess1'};
+                 '2019_04_22_S03_Sess1',...
+                 '2019_04_24_S04_Sess1'};
 NiiRawName{2} = {'2019_04_22_PD01_Sess2',...
                  '2019_03_13_pd02_sess2',...
                  '2019_03_28_PP1_S01_SESS2',...
                  '2019_04_16_S02_sess2',...
+                 '2019_04_24_S03_Sess2',...
                  ''};
              
 fscanNum{1}   = {[21,24,27,30,33,36],...
                  [24,27,30,33,36],...
                  [14,17,20,23,26],...
                  [13,15,17,19,21,23],...
-                 [12,14,16,18,20]};   
+                 [12,14,16,18,20],...
+                 [12,18,20,22,24]};   
 fscanNum{2}   = {[12,14,16,18,20],...
                  [12,15,18,21,24,27],...
                  [12,14,16,18,20,22],...
                  [29,31,35,37,39],...
+                 [12,14,16,18,20,22],...
                  []};  
              
 fieldNum{1}   = {[],...
                  [43,44],...
                  [31:34],...
                  [26:29],...
-                 [23:26]};                                               
+                 [23:26],...
+                 [36,37]};                                               
 fieldNum{2}   = {[23:26],...
                  [29,30],...
                  [25:28],...
                  [42:45],...
+                 [25:28],...
                  []};
              
-dataPrefix    = {'r','u','u','u','u'};
+dataPrefix    = {'r','u','u','u','u','u'};
              
 % ------------------------- Analysis Cases --------------------------------
 switch(what)
@@ -1351,14 +1363,15 @@ switch(what)
             OUT    = fullfile(outDir, [prefix subj_name{s},'_SC.nii']);
             dircheck(outDir);
             % calc with FSL
-            comm = sprintf('run_first_all -i %s -o %s', IN, OUT);
-            fprintf('%s\n',comm);
-            [status,result] = system(comm);
+            cmd = sprintf('run_first_all -i %s -o %s', IN, OUT);
+            fprintf('%s\n',cmd);
+            %[status,result] = call_fsl(cmd);
+            [status,result] = system(cmd);
             if status; error(result); end
             % extract .nii.gz to .nii
             fname = fullfile(outDir,[prefix subj_name{s},'_SC_all_fast_firstseg.nii']);
-            comm  = sprintf('mri_convert %s.gz %s', fname, fname);
-            [status,result] = system(comm);
+            cmd   = sprintf('mri_convert %s.gz %s', fname, fname);
+            [status,result] = system(cmd);
             if status; error(result); end
             fprintf('Done %s.\n',subj_name{s});
         end
@@ -1437,7 +1450,8 @@ switch(what)
         subj_hrfParams = {[3.6873 11.893 d_hrf(3) d_hrf(4) 0.23299 d_hrf(6) d_hrf(7)],... % subject-specific hrf params (estimated from glm1)
                           [5.5018 15.717 d_hrf(3) d_hrf(4) 6.2265 d_hrf(6) d_hrf(7)],...
                           [4.986  15.452 d_hrf(3) d_hrf(4) 6.1327 d_hrf(6) d_hrf(7)],...
-                          [5.0097 16.379 d_hrf(3) d_hrf(4) 5.6836 d_hrf(6) d_hrf(7)]};
+                          [5.0097 16.379 d_hrf(3) d_hrf(4) 5.6836 d_hrf(6) d_hrf(7)],...
+                          [4.9406 13.158 d_hrf(3) d_hrf(4) 2.6733 d_hrf(6) d_hrf(7)]};
         % Define number of regressors in glm
         switch glm 
             case 1
@@ -2672,7 +2686,7 @@ switch(what)
         fprintf('\n')
     case 'ROI_stats'                                                        % STEP 5.4   :  Calculate stats/distances on activity patterns
         glm = 2;
-        sn  = 1;
+        sn  = 1:5;
         vararginoptions(varargin,{'sn','glm'});
         % housekeeping
         numDigits = stimulationChords;
@@ -2964,7 +2978,7 @@ switch(what)
         switch cplot
             case 'all' % do and plot 
                 if glm>2
-                    % account for error/foot regressors
+                    % account for thumb response regressor
                     CnumDigits = indicatorMatrix('identity',[numDigits;0]);
                     CnumDigits = bsxfun(@minus,CnumDigits,mean(CnumDigits,2));
                     Call   = eye(32)-ones(32)/32;
@@ -3676,6 +3690,7 @@ switch(what)
         % get data
         [Y,partVec,condVec,G_hat] = pp1_imana('PCM_getData','sn',sn,'roi',roi,'glm',glm);
         G_hat = mean(G_hat,3);
+        
         % get pcm models
         M{1} = pp1_imana('pcm_null');
         M{end+1} = pp1_imana('pcm_noScale');                        % 2
@@ -3695,6 +3710,7 @@ switch(what)
         scaleParams = log([1.1, 1.2, 1.3, 1.4])';
         M{6}.theta0 = Fx0;
         M{7}.theta0 = [Fx0;scaleParams];
+        
         % fit models
         [T,theta_hat,G_pred] = pcm_fitModelGroup(Y,M,partVec,condVec,'runEffect',runEffect,'fitScale',1);
         [Tcv,theta_cv]       = pcm_fitModelGroupCrossval(Y,M,partVec,condVec,'runEffect',runEffect,'groupFit',theta_hat,'fitScale',1,'verbose',1);
@@ -3720,69 +3736,114 @@ switch(what)
         %keyboard
         varargout = {Tcv,T,M,theta_cv,G_pred,Y,partVec};
     case 'PCM_fit'
-        sn  = [2:4];
+        % Does pcm fitting for multiple rois
+        sn  = 1:5;
         roi = [1:4,6,13:16,18];
         glm = 2;
         vararginoptions(varargin,{'sn','roi','glm'});
-%         figure('Color',[1 1 1]);
-%         i = 1; % subplot counter
-        D = []; % output data structure
         for r = roi
             fprintf('roi: %d\n',r);
-            [Tcv,T,M,theta_cv] = pp1_imana('PCM_fitModels_oneROI','sn',sn,'roi',r,'glm',glm,'plotit',0,'saveit',1);
-            numModels = numel(M);
-            % scale and plot likelihoods
-            Tcv.likelihood_norm = bsxfun(@minus,Tcv.likelihood,Tcv.likelihood(:,1));
-%             subplot(1,length(roi),i);
-%             Tcv = pcm_plotModelLikelihood(Tcv,M,'upperceil',T.likelihood(:,end),'style','bar');
-%             set(gca,'xticklabelrotation',45);
-%             title(reg_title{r});
-%             box off;
-%             i = i+1; % update subplot counter
-            % parse theta estimates into output datastructure
-            dd = [];
-            for m = 1:numModels
-                for s = 1:length(sn)
-                    if m < numModels-1
-                        q.theta_cv = {theta_cv{m}(:,s)'};
-                    else %if m==numModels
-                        q.theta_cv = {[]};
-                    end
-                    dd = addstruct(dd,q);
-                end
-            end
-            d.theta_cv         = dd.theta_cv;
-            % parse likelihoods into output datastructure
-            d.likelihood_norm  = Tcv.likelihood_norm(:);
-            d.likelihood       = Tcv.likelihood(:);
-            d.noise            = Tcv.noise(:);
-            d.scale            = Tcv.scale(:);
-            d.sn               = kron(ones(numModels,1),sn');
-            d.model            = kron([1:numModels]',ones(length(sn),1));
-            d.roi              = ones(numModels*length(sn),1).*r;
-            d.glm              = ones(numModels*length(sn),1).*glm;
-            D = addstruct(D,d);
+            pp1_imana('PCM_fitModels_oneROI','sn',sn,'roi',r,'glm',glm,'plotit',0,'saveit',1);
         end
-%         plt.match('y');
-        outName = fullfile(pcmDir,sprintf('pcmModelFits_glm%d',glm));
-        save(outName,'-struct','D');
+    case 'PCM_getFits'
+        % Gets models fits across regions & arranges into plotting
+        % structure.
+        % Assumes null model is model 1 and noiseceiling is last model.
+        glm = 3;
+        vararginoptions(varargin,{'glm'});
+        D   = []; % output structure
+        for r = 1:length(reg_title)
+            % if exists, load pcm fits for region (otherwise, skip region)
+            try
+                load(fullfile(pcmDir,sprintf('pcmFits_glm%d_roi%d',glm,r)));
+            catch
+                continue
+            end
+            % scale likelihoods
+            Tcv.likelihood_norm = bsxfun(@minus,Tcv.likelihood,Tcv.likelihood(:,1));
+            % arrange into plotting structure
+            numSubjs   = size(Tcv.SN,1);
+            numModels  = numel(M);
+            nameModels = {};
+            Q = [];
+            for m = 1:numModels
+                % get model names
+                nameModels{end+1,1} = M{m}.name;
+                % get thetas
+                if isempty(strfind(M{m}.name,'noiseceiling'))
+                    q.thetaCV = num2cell(theta_cv{m}',2);
+                else
+                    q.thetaCV = num2cell(nan(numSubjs,1),2);
+                end
+                q.model = ones(numSubjs,1).*m;
+                q.sn    = [1:numSubjs]';
+                Q = addstruct(Q,q);
+            end
+            v = ones(numModels,1);
+            for j = 1:numSubjs
+                d.sn  = v.*Tcv.SN(j);
+                d.roi = v.*r;
+                d.model = [1:numModels]';
+                d.modelName  = nameModels;
+                d.likeNormCV = Tcv.likelihood_norm(j,:)';
+                d.likeCV     = Tcv.likelihood(j,:)';
+                d.likeNorm   = [nan(numModels-1,1); T.likelihood(j,end) - Tcv.likelihood(j,1)]; % upper noise ceiling
+                d.thetaCV    = Q.thetaCV(Q.sn==j);
+                D = addstruct(D,d);
+            end
+        end
         varargout = {D};
-    case 'PCM_plotFits'  
+    case 'PCM_plotFitsBox'  
         % loads fit results per roi and plots them.
-        glm = 2;
-        roi = [1:4];
-        sn  = 2:4;
+        glm = 3;
+        roi = [1:4,6];
+        sn  = 1:5;
         vararginoptions(varargin,{'glm','roi','sn'});
+        % get pcm fits
+        D = pp1_imana('PCM_getFits','glm',glm);
+        D = getrow(D,ismember(D.roi,roi) & ismember(D.sn,sn));
+        % plot pcm fits
+        numModels  = length(unique(D.model));
+        nameModels = D.modelName(1:numModels);
+        numPlots   = numel(roi);
         figure('Color',[1 1 1]);
-        numPlots = numel(roi);
         for i = 1:numPlots
             r = roi(i);
-            % load fits
+            subplot(1,numPlots,i);
+            sty = style.custom(plt.helper.get_shades(numModels-2,'gray','descend'));
+            plt.box(D.model,D.likeNormCV,'subset',D.model>1 & D.model<numModels & D.roi==r,'split',D.model,'style',sty);
+            plt.set('xticklabel',{nameModels{2:numModels-1}},'xticklabelrotation',45);
+            plt.labels('','relative log likelihood',reg_title{r});
+            % plot noise ceilings
+            drawline(mean(D.likeNormCV(D.model==numModels & D.roi==r)),'dir','horz','linestyle','-.');
+            drawline(mean(D.likeNorm(D.model==numModels & D.roi==r)),'dir','horz','linestyle','-');
+            legend off
+            ylims = ylim;
+            ylim([0 ylims(2)]);
+        end
+        plt.match('y');
+        varargout = {D};
+    case 'PCM_plotFitsBar'  
+        % loads fit results per roi and plots them.
+        glm = 3;
+        roi = [1:4,6];
+        sn  = 1:5;
+        vararginoptions(varargin,{'glm','roi','sn'});
+        numPlots = numel(roi);
+        figure('Color',[1 1 1]);
+        for i = 1:numPlots
+            r = roi(i);
             load(fullfile(pcmDir,sprintf('pcmFits_glm%d_roi%d',glm,r)));
+            T   = rmfield(T,{'reg'}); 
+            T   = getrow(T,ismember(T.SN,sn));
+            Tcv = rmfield(Tcv,{'reg'});
+            Tcv = getrow(Tcv,ismember(Tcv.SN,sn));
+            Tcv.likelihood_norm = bsxfun(@minus,Tcv.likelihood,Tcv.likelihood(:,1));
             % plot fits (errorbars are stderr)
             subplot(1,numPlots,i);
-            pcm_plotModelLikelihood(Tcv,M,'upperceil',T.likelihood(:,end),'style','bar','Nceil',9);
+            pcm_plotModelLikelihood(Tcv,M,'upperceil',T.likelihood(:,end),'style','bar','Nceil',numel(M));
             set(gca,'xticklabelrotation',45);
+            ylabel('relative log-likelihood')
             title(reg_title{r});
             box off;
         end
@@ -3808,9 +3869,9 @@ switch(what)
         end    
     case 'PCM_plotThetas'
         % loads fit results per roi and plots them.
-        glm   = 2;
+        glm   = 3;
         roi   = [1:4];
-        sn    = 2:4;
+        sn    = 1:5;
         model = 6;
         vararginoptions(varargin,{'glm','roi','sn'});
         % load plotting-friendly data structure
@@ -3820,9 +3881,7 @@ switch(what)
         % plot
         sty = style.custom(plt.helper.get_shades(length(roi),'jet','descend'));
         plt.trace([1:14],D.theta_cv,'split',D.roi,'style',sty);
-        
-        keyboard
-        
+
     case 'PCM_addPatterns'
         sn  = 1:4;
         roi = 5;
