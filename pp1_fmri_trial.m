@@ -18,11 +18,11 @@ end
 % - state timing events  
 Ia1 = find(state==4,1,'first'); % stimulation start
 Ia2 = find(state==4,1,'last');  % stimulation end
-
+idx = Ia1:Ia2;
 % 3. Estimating peak forces
 %digits  = [d.d1 d.d2 d.d3 d.d4 d.d5].*[1:5];
 %digits  = digits(digits>0);
-fthres  = 0.3;
+fthres  = 0.2;
 Force   = smooth_kernel(Force,4);   % Smoothing with Gaussian kernel
 %vF  = velocity_discr(Force); % first derivative of force (velocity)
 
@@ -47,24 +47,23 @@ for i = 1:5
     t.peakF_stims    = [nan nan];
     t.peakF_times    = [nan nan];
     
-    % get times of stimulation state
-    idx    = find(Force(:,i)>fthres);
-    idx    = idx(idx>=Ia1 & idx<=Ia2); % cut stimulation times to be within range of stimulation state
-    ftime  = time(idx);
-    if ~isempty(idx) && t.stimulated
-        t.time_stimOnset = time(idx(1)) - time(Ia1);
+    if t.stimulated %~isempty(idx) && t.stimulated
+        t.time_stimOnset = time(find(Force(idx,i)>fthres,1) + Ia1-1) - time(Ia1);
         t.peakF_filt     = max(Force(idx,i),[],1);
         % find times for peak forces of fingers (split into windows to find
         % peaks b/c peak estimate is more stable than toying with
         % minpeakdistance)
-        [n,e,b] = histcounts(idx,d.numStim);
+        %[n,~,b] = histcounts(1:size(idx,2),d.numStim);
+        b = floor(length(idx)/d.numStim);
         pf = [];
         pt = [];
         for j = 1:d.numStim
-            jidx = idx(b==j);
+            b1 = (1+b*(j-1));
+            b2 = b*j;
+            jidx = idx(b1:b2);
             try
                 [pf(j),pt(j)] = findpeaks(Force(jidx,i),'minpeakheight',fthres,'npeaks',1,'SortStr','descend');
-            catch ME
+            catch
                 keyboard
             end
             pt(j) = jidx(pt(j));
@@ -83,11 +82,11 @@ end
 if (fig) %&& sum(ismember(d.TN,[2,7,9,11,6,30,43,20,27,15]))==1)
     time = time(Ia1:Ia2)./1000;
     time = time-ones(size(time)).*time(1);
-    plot(time,Force(Ia1:Ia2,1),'Color',[0.2 0.14 0.53],'LineWidth',3); hold on
-    plot(time,Force(Ia1:Ia2,2),'Color',[0.29 0.49 0.36],'LineWidth',3);
-    plot(time,Force(Ia1:Ia2,3),'Color',[0.97 0 0],'LineWidth',3);
-    plot(time,Force(Ia1:Ia2,4),'Color',[0 0.58 0.77],'LineWidth',3);
-    plot(time,Force(Ia1:Ia2,5),'Color',[0.8 0.27 0.5],'LineWidth',3);
+    plot(time,Force(Ia1:Ia2,1),'Color',[0.2 0.14 0.53],'LineWidth',2); hold on
+    plot(time,Force(Ia1:Ia2,2),'Color',[0.29 0.49 0.36],'LineWidth',2);
+    plot(time,Force(Ia1:Ia2,3),'Color',[0.97 0 0],'LineWidth',2);
+    plot(time,Force(Ia1:Ia2,4),'Color',[0 0.58 0.77],'LineWidth',2);
+    plot(time,Force(Ia1:Ia2,5),'Color',[0.8 0.27 0.5],'LineWidth',2);
     leg = {'thumb','index','middle','fourth','little'};
     legend(leg,'Location','NorthWest');   
     legend boxoff

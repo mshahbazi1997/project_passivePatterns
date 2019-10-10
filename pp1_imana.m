@@ -1,76 +1,38 @@
 function varargout = pp1_imana(what,varargin)
-% function    varargout = fmri_imana(what,varargin)
+% function    varargout = pp1_imana(what,varargin)
 %  
-% Operates with vararginoptions, eg.:
-%       fmri_imana(analysis_step,'sn',1,'roi',2)
+% passive patterns 1 fmri analyses
 %
-% This is scaffolding for imaging analysis code.
-%
-% WRAPPER cases submit batch processing stages. WRAPPER cases can accept an
-% array of subject numbers with 'sn' option (this is often not the case
-% when calling individual preprocessing cases).
-%
-% IMPORTANT NOTES:
-%   With every new subject, you must update variables in 'Subject Things'.
-%
-%      'dircheck' is a local function that creates a new directories so it
-%      can save appropriate datafile structures. 
-%
-%   Of course, for full functionality you will need many functions from
-%      various Diedrichsen Lab toolboxes (sourced through github and the
-%      lab website).
-
 % SArbuckle, Motor Control Group, 2019, UWO
 % saarbuckle@gmail.com
 
-
-% -------------------------------------------------------------------------
-cwd = cd; % get current directory when called, and return at end of script
-% ------------------------- Directories -----------------------------------
-codeDir         ='/Users/sarbuckle/Dropbox (Diedrichsenlab)/Arbuckle_code/projects/project_passivePatterns';
-baseDir         ='/Users/sarbuckle/DATA/passivePatterns1/fmri';   % base directory for analysis
-% directories for "raw" data (i.e. data during/from preprocessing)
-behavDir        =[baseDir '/data'];          % behavioural data directory
-dicomDir        =[baseDir '/data_dicom'];    % imgs hot off the scanner
-imagingDirRaw   =[baseDir '/imaging_data_raw']; 
-% working data directories (this data has been preprocessed and is ready to go)
-fieldmapDir     =[baseDir '/fieldmaps/'];    % this explicit path is not required here, but is helpful to know it is required by realign_unwarp
-imagingDir      =[baseDir '/imaging_data'];               
-anatomicalDir   =[baseDir '/anatomicals'];  
-cerebAnatDir    =[baseDir '/c_anatomicals'];  
-scAnatDir       =[baseDir '/sc_anatomicals']; 
-freesurferDir   =[baseDir '/surfaceFreesurfer'];          
-caretDir        =[baseDir '/surfaceCaret'];     
-gpCaretDir      =[caretDir '/fsaverage_sym'];
-regDir          =[baseDir '/RegionOfInterest/'];   % where most of the important analysis data structures will be saved       
-pcmDir          =[baseDir '/PCM_models'];
-% update glmDir when adding new glms
-glmDir          ={[baseDir '/glm1'],[baseDir '/glm2'],[baseDir '/glm3']};              
-    
-filePrefix = 'pp1_fmri';
-% check that these directories exist (may be best to comment out once run
-% the first time)
-% dircheck(behavDir);
-% dircheck(dicomDir);
-% dircheck(imagingDirRaw);
-% dircheck(phaseDirRaw);
-
-% dircheck(fieldmapDir);
-% dircheck(phaseDir);
-% dircheck(imagingDir);
-
-% dircheck(anatomicalDir);
-% dircheck(freesurferDir);
-% dircheck(caretDir);
-% dircheck(gpCaretDir);   
-% dircheck(regDir);
-% dircheck(glmDir{1});
+%% ------------------------- Directories ----------------------------------
+filePrefix = 'pp1_fmri'; % prefix for output files from experiment script
+cwd        = cd; % get current directory when called, and return at end of script
+% paths to project directories
+codeDir         = '/Users/sarbuckle/Dropbox (Diedrichsenlab)/Arbuckle_code/projects/project_passivePatterns';
+baseDir         = '/Users/sarbuckle/DATA/passivePatterns1/fmri';   % base directory for analysis
+behavDir        = [baseDir '/data'];             % behavioural data directory
+dicomDir        = [baseDir '/data_dicom'];       % imgs hot off the scanner
+imagingDirRaw   = [baseDir '/imaging_data_raw']; % raw nifti backups 
+fieldmapDir     = [baseDir '/fieldmaps/'];       
+imagingDir      = [baseDir '/imaging_data'];               
+anatomicalDir   = [baseDir '/anatomicals'];  
+cerebAnatDir    = [baseDir '/c_anatomicals'];  
+scAnatDir       = [baseDir '/sc_anatomicals']; 
+freesurferDir   = [baseDir '/surfaceFreesurfer'];  
+wbDir           = [baseDir '/surfaceWB'];
+atlasDir        = '/Users/sarbuckle/DATA/Atlas_templates';
+caretDir        = [baseDir '/surfaceCaret'];     
+gpCaretDir      = [caretDir '/fsaverage_sym'];
+regDir          = [baseDir '/RegionOfInterest/'];   
+pcmDir          = [baseDir '/PCM_models'];
+glmDir          = {[baseDir '/glm1'],[baseDir '/glm2'],[baseDir '/glm3']};              
 
 % set default plotting style
 style.file(fullfile(codeDir,'pp1_style.m'));
 style.use('default');
-
-% ------------------------- Experiment Info -------------------------------
+%% ------------------------- Exp info -------------------------------------
 TR_length  = 1.5;  % seconds
 numDummys  = 2;  % dummy images at the start of each run (these are discarded)
 numTRs     = {[410,410,410,410,410,410,410,410,410,410,410],...
@@ -78,30 +40,33 @@ numTRs     = {[410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410,410,410,410,410,410,410],...
               [410,410,410,410,410,410,410,410,410,410,410],...
-              [410,410,410,410,410]};  % total # of images per run (including dummies) per subj
+              [410,410,410,410,410,410,410,410,410,410,410],...
+              [410,410,410,410,410,410],...
+              [410,410,410,410,410,410]};  % total # of images per run (including dummies) per subj
 run{1}     = {[1:6],...
              [1:5],...
              [1:5],...
              [1:6],...
              [1:5],...
-             [1:5]};
+             [1:5],...
+             [1:6],...
+             [1:6]};
 run{2}     = {[7:11],...
              [6:11],...
              [6:11],...
              [7:11],...
              [6:11],...
+             [6:11],...
+             [],...
              []};
-% ------------------------- ROI things ------------------------------------
+%% ------------------------- ROI info -------------------------------------
 hem        = {'lh','rh'};                                                   % left & right hemi folder names/prefixes
-regname    = {'sB3a','sB3b','sB1','sB2','S1','M1','B1','B2','B3','B4','B6','TH'}; % Cortical ROIs, 5 = S1, 6 = M1; Thalamus = 12                                             % roi names, independent of hemisphere    
+regname    = {'ba3A','ba3B','ba1','ba2','rM1','cM1','S1','M1','SPLa','SPLp','TH'};        % Cortical ROIs, 5 = S1, 6 = M1; Thalamus = 12                                             % roi names, independent of hemisphere    
 regSide    = [ones(size(regname)),...                                       % Hemisphere of the roi
                 ones(size(regname)).*2];                                    % [1 = left hemi (contra), 2 = right hemi (ipsi)]
 regType    = [1:length(regname),...                                         % roi # (within hemisphere)
                 1:length(regname)];
 numregions = max(regType);                                                  % total number of regions 
-% title of regions ordered according to numerical call id (eg. 2 = Lh M1)
-reg_title  = {'left sB3a','left sB3b','left sB1','left sB2','left S1','left M1','left B1','left B2','left B3','left B4','left B6','left TH',...
-            'right sB3a','right sB3b','right sB1','right sB2','right S1','right M1','right B1','right B2','right B3','rh B4','right B6','right TH'}; 
 
 % cerebellum rois (don't over interpret these feature labels)
 % Region 1 - Left Hand Presses
@@ -114,13 +79,11 @@ reg_title  = {'left sB3a','left sB3b','left sB1','left sB2','left S1','left M1',
 % Region 8 - Semantic Knowledge
 % Region 9 - Verbal Fluency
 % Region 10- Autobiographical Recall
-
-% ------------------------- Freesurfer things -----------------------------         
-atlasA    = 'x';                                                            % freesurfer filename prefix
-atlasname = 'fsaverage_sym';                                                % freesurfer average atlas
-hemName   = {'LeftHem','RightHem'};                                         % freesurfer hemisphere folder names    
-
-% ------------------------- Subject things --------------------------------
+%% ------------------------- FS info --------------------------------------
+atlasA    = 'x';                      % freesurfer filename prefix
+atlasname = 'fsaverage_sym';          % freesurfer average atlas
+hemName   = {'LeftHem','RightHem'};   % freesurfer hemisphere folder names    
+%% ------------------------- Subj info ------------------------------------
 % The variables in this section must be updated for every new subject.
 %       DiconName  :  first portion of the raw dicom filename
 %       NiiRawName :  first protion of the nitfi filename (get after 'PREP_4d_nifti')
@@ -133,32 +96,38 @@ hemName   = {'LeftHem','RightHem'};                                         % fr
 %                      [0 0 0] in this dataset.
 %
 % The values of loc_AC should be acquired manually prior to the preprocessing
-%   Step 1: get .nii file of anatomical data by running "spmj_tar2nii(TarFileName,NiiFileName)"
-%   Step 2: open .nii file with MRIcron and manually find AC and read the xyz coordinate values
+%   Open .nii file with MRIcron and manually find AC and read the xyz coordinate values
 %           (note: there values are not [0 0 0] in the MNI coordinate)
-%   Step 3: set those values into loc_AC (subtract from zero)
-subj_name  = {'pd01','pd02','s01','s02','s03','s04'};
-numSess    = [2,2,2,2,2,1];
-anatNum{1} = {[],[40],[],[],[27:31],[25:29]};
-anatNum{2} = {[],[],[29,32],[20:24],[],[]};
+%   In MRIcron, the values you want are presented at the top in the program
+%   bar.
+subj_name  = {'pd01','pd02','s01','s02','s03','s04','s05','s06'};
+numSess    = [2,2,2,2,2,2,1,1];
+anatNum{1} = {[],[40],[],[],[27:31],[25:29],[29:33],[31:35]};
+anatNum{2} = {[],[],[29,32],[20:24],[],[],[],[]};
 loc_AC     = {[-78  -122 -126],...
               [-80 -128 -133],...
               [-80 -122 -123],...
               [-82 -116 -132],...
               [-81 -120 -135],...
-              [-84 -112 -122]};
+              [-84 -112 -122],...
+              [-82 -122 -133],...
+              [-81 -138 -137]};
           
 DicomName{1}  = {'2019_03_01_PD01.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_12_pd02_sess1.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_26_PP1_S01.MR.Diedrichsen_PassivePatterns',...
                  '2019_04_15_S02_sess1.MR.Diedrichsen_PassivePatterns',...
                  '2019_04_22_S03_Sess1.MR.Diedrichsen_PassivePatterns',...
-                 '2019_04_24_S04_Sess1.MR.Diedrichsen_PassivePatterns'};
+                 '2019_04_24_S04_Sess1.MR.Diedrichsen_PassivePatterns',...
+                 '2019_04_30_S05_Sess1.MR.Diedrichsen_PassivePatterns',...
+                 '2019_05_02_S06_Sess1.MR.Diedrichsen_PassivePatterns'};
 DicomName{2}  = {'2019_04_22_PD01_Sess2.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_13_pd02_sess2.MR.Diedrichsen_PassivePatterns',...
                  '2019_03_28_PP1_S01_SESS2.MR.Diedrichsen_PassivePatterns',...
                  '2019_04_16_S02_sess2.MR.Diedrichsen_PassivePatterns',...
                  '2019_04_24_S03_Sess2.MR.Diedrichsen_PassivePatterns',...
+                 '2019_04_30_S04_Sess2.MR.Diedrichsen_PassivePatterns',...
+                 '',...
                  ''};
              
 NiiRawName{1} = {'2019_03_01_PD01',...
@@ -166,12 +135,16 @@ NiiRawName{1} = {'2019_03_01_PD01',...
                  '2019_03_26_PP1_S01',...
                  '2019_04_15_S02_sess1',...
                  '2019_04_22_S03_Sess1',...
-                 '2019_04_24_S04_Sess1'};
+                 '2019_04_24_S04_Sess1',...
+                 '2019_04_30_S05_Sess1',...
+                 '2019_05_02_S06_Sess1'};
 NiiRawName{2} = {'2019_04_22_PD01_Sess2',...
                  '2019_03_13_pd02_sess2',...
                  '2019_03_28_PP1_S01_SESS2',...
                  '2019_04_16_S02_sess2',...
                  '2019_04_24_S03_Sess2',...
+                 '2019_04_30_S04_Sess2',...
+                 '',...
                  ''};
              
 fscanNum{1}   = {[21,24,27,30,33,36],...
@@ -179,12 +152,16 @@ fscanNum{1}   = {[21,24,27,30,33,36],...
                  [14,17,20,23,26],...
                  [13,15,17,19,21,23],...
                  [12,14,16,18,20],...
-                 [12,18,20,22,24]};   
+                 [12,18,20,22,24],...
+                 [12,14,16,18,20,22],...
+                 [14,16,18,20,22,24]};   
 fscanNum{2}   = {[12,14,16,18,20],...
                  [12,15,18,21,24,27],...
                  [12,14,16,18,20,22],...
                  [29,31,35,37,39],...
                  [12,14,16,18,20,22],...
+                 [14,16,18,20,22,24],...
+                 [],...
                  []};  
              
 fieldNum{1}   = {[],...
@@ -192,34 +169,45 @@ fieldNum{1}   = {[],...
                  [31:34],...
                  [26:29],...
                  [23:26],...
-                 [36,37]};                                               
+                 [34:37],...
+                 [25:28],...
+                 [27:30]};                                               
 fieldNum{2}   = {[23:26],...
                  [29,30],...
                  [25:28],...
                  [42:45],...
                  [25:28],...
+                 [27:30],...
+                 [],...
                  []};
              
-dataPrefix    = {'r','u','u','u','u','u'};
-             
-% ------------------------- Analysis Cases --------------------------------
+dataPrefix    = {'r','u','u','u','u','u','u','u'};             
+
+%% ------------------------- ANALYSES -------------------------------------
 switch(what)
     case 'LIST_subjs'               
         D = dload(fullfile(baseDir,'subj_info.txt'));
         
         if nargout==0
-            fprintf('\nSN\tID\t\tAge\tGender\tHandedness\tNum_FMRI_Sessions');
-            fprintf('\n--\t--\t\t---\t------\t----------\t-----------------\n');
-            for s = unique(D.SN)'
-                S = getrow(D,ismember(D.SN,s));
-                fprintf('%s\t%s\t\t%d\t%d\t%s\t\t%d',S.SN{1},S.ID{1},S.age,S.gender,S.handedness{1},S.fmri_sessions);
+            fprintf('\nSN\torigSN\tID\t\tAge\tGender\tHandedness\tNum_FMRI_Sessions');
+            fprintf('\n--\t------\t--\t\t---\t------\t----------\t-----------------\n');
+            for s = unique(D.sn)'
+                S = getrow(D,ismember(D.sn,s));
+                fprintf('%02d\t%s\t%s\t\t%d\t%d\t%s\t\t%d',S.sn,S.origSN{1},S.ID{1},S.age,S.gender,S.handedness{1},S.fmri_sessions);
                 fprintf('\n');
-            end;
+            end
             fprintf('\n');
         else
+            D = rmfield(D,{'ID'});
             varargout = {D};
-        end;
-    case 'LIST_rois'                
+        end
+    case 'getSubjs'
+        % returns vector of subject numbers for which we have fully
+        % analyzed fmri data available.
+        D = pp1_imana('LIST_subjs');
+        sn = D.sn(D.fmri_sessions==2)';
+        varargout = {sn};
+    case 'LIST_rois'
         fprintf('\nROI#\tName\tHemipshere');
         fprintf('\n----\t----\t----------\n');
         for r = 1:length(regSide)
@@ -258,10 +246,7 @@ switch(what)
         Y     = varargin{1};
         split = [];
         label = [];
-        fig   = [];
-        vararginoptions(varargin(2:end),{'split','label','fig'});
-        
-        if isempty(fig); figure('Color',[1 1 1]); else; fig; end
+        vararginoptions(varargin(2:end),{'split','label'});
         
         % style setup
         if numel(unique(split))==5
@@ -311,10 +296,15 @@ switch(what)
             runs        = unique(D.BN);
             for r = runs'
                 trials  = D.TN(D.BN==r);
-                MOV     = movload(fullfile(behavDir,sprintf('%s_%s_%02d.mov',filePrefix,subj_name{sn},r)));
+                try
+                    % deal with missing mov file from s04 run 1
+                    MOV = movload(fullfile(behavDir,sprintf('%s_%s_%02d.mov',filePrefix,subj_name{sn},r)));
+                catch
+                    continue
+                end
                 for i = trials' 
                     d = getrow(D,D.TN==i & D.BN==r);
-                    t = pp1_fmri_trial(MOV{1,i},d,0);
+                    t = pp1_fmri_trial(MOV{1,i},d,1);
                     if ismember(r,run{1}{sn}) && ~isempty(t)
                         t.sess = ones(5,1).*1;
                         t.sn   = ones(5,1).*sn;
@@ -326,7 +316,7 @@ switch(what)
                     end
                 end
             end
-            save(dataFileOut,'T');
+            %save(dataFileOut,'T');
         end
     case 'SUBJ_plotStimForce'
         % plots max stimulation force per finger 
@@ -334,22 +324,23 @@ switch(what)
         vararginoptions(varargin,{'sn'});
         % load data
         load(fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{sn}))); % T
-        D = tapply(T,{'run','numDigits','finger','stimulated'},{'peakF_raw','nanmean'},{'peakF_filt','nanmean'},{'time_stimOnset','nanmean'});
+        D = tapply(T,{'run','numDigits','finger','stimulated'},...
+            {'peakF_raw','nanmean'},{'peakF_filt','nanmean'},{'time_stimOnset','nanmean'},{'forceStim','mean'});
         % plot
         style.use('5fingers');
         
         subplot(1,3,1);
-        plt.line(D.numDigits,D.peakF_filt,'split',D.finger,'errorfcn','std','subset',D.stimulated==1);
-        plt.set('xlim',[0.5 5.5],'ylim',[0 4]);
-        plt.labels('# fingers stimulated','force (N)',sprintf('stimulated\ntrials'));
-        drawline(unique(T.forceStim),'dir','horz','linestyle',':','linewidth',1.5);
+        plt.line(D.numDigits,D.peakF_filt./D.forceStim,'split',D.finger,'errorfcn','std','subset',D.stimulated==1);
+        plt.set('xlim',[0.5 5.5],'ylim',[0 1.25]);
+        plt.labels('# fingers stimulated','% target force',sprintf('stimulated\ntrials'));
+        drawline(1,'dir','horz','linestyle',':','linewidth',1.5);
         legend off
         
         subplot(1,3,2);
-        plt.line(D.numDigits,D.peakF_raw,'split',D.finger,'errorfcn','std','subset',D.stimulated==0);
-        plt.set('xlim',[0.5 4.5],'ylim',[0 4]);
-        plt.labels('# fingers stimulated','force (N)',sprintf('non-stimulated\ntrials'));
-        drawline(unique(T.forceStim),'dir','horz','linestyle',':','linewidth',1.5);
+        plt.line(D.numDigits,D.peakF_raw./D.forceStim,'split',D.finger,'errorfcn','std','subset',D.stimulated==0);
+        plt.set('xlim',[0.5 4.5],'ylim',[0 1.25]);
+        plt.labels('# fingers stimulated','% target force',sprintf('non-stimulated\ntrials'));
+        drawline(1,'dir','horz','linestyle',':','linewidth',1.5);
         plt.legend('east',{'thumb','index','middle','ring','little'});
         legend off
         
@@ -360,6 +351,46 @@ switch(what)
         plt.legend('east',{'thumb','index','middle','ring','little'});
         
         varargout = {D};
+    case 'SUBJ_getDprime'
+        sn = 1;
+        vararginoptions(varargin,{'sn'});
+        % load data
+        % arrange data into plotting structure
+        load(fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{sn}))); % T
+        % calculate percent incorrect trials
+        T.numTrials = ones(size(T.sn));
+        P = getrow(T,T.falseResp==0);
+        P = tapply(P,{'sn','numDigits','chordNum','sess'},{'isError','sum'},{'numTrials','sum'}); % T has 5 rows per trial (one per finger)
+        P.isError   = P.isError./5; % correct for number of rows per trial
+        P.numTrials = P.numTrials./5;
+        P.perErr    = P.isError./P.numTrials;
+        falseAlarm  = sum(P.isError)/sum(P.numTrials);
+        % calculate percent correct for misleading trials (mismatch
+        % chord)
+        F = getrow(T,T.falseResp==1);
+        F = tapply(F,{'run','trial','sn','numDigits','chordNum','sess','falseResp'},{'isError','sum'});
+        F.isError = F.isError./5;
+        hitRate   = sum(F.isError==0)/size(F.sn,1);
+        % calculate D prime
+        D.sn     = sn;
+        D.dprime = norminv(hitRate) - norminv(falseAlarm);
+        D.perErr = 1-hitRate;
+        
+        varargout = {D,P,F,T};
+    case 'SUBJ_getTaskPerformance'
+        sn = 1;
+        vararginoptions(varargin,{'sn'});
+        % load data
+        % arrange data into plotting structure
+        load(fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{sn}))); % T
+        % calculate percent incorrect trials
+        T.numTrials = ones(size(T.sn));
+        P = tapply(T,{'sn','numDigits','chordNum','sess'},{'isError','sum'},{'numTrials','sum'}); % T has 5 rows per trial (one per finger)
+        P.isError   = P.isError./5; % correct for number of rows per trial
+        P.numTrials = P.numTrials./5;
+        P.perErr    = P.isError./P.numTrials;
+        
+        varargout = {P,T};
     case 'SUBJ_getStimTime'
         % plots max stimulation peak times per finger
         sn = 1;
@@ -432,7 +463,7 @@ switch(what)
         varargout = {D};
     case 'GROUP_plotStimForce'
         % plots max stimulation force per finger 
-        sn = 1:length(subj_name);
+        sn = 1:6;%length(subj_name);
         vararginoptions(varargin,{'sn'});
         % get data
         D = [];
@@ -440,24 +471,24 @@ switch(what)
             load(fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{s}))); % T
             D = addstruct(D,T);
         end
-        D = tapply(D,{'sn','numDigits','finger','stimulated'},{'peakF_raw','nanmean'},{'peakF_filt','nanmean'},{'time_stimOnset','nanmean'});
+        D = tapply(D,{'sn','numDigits','finger','stimulated'},...
+            {'peakF_raw','nanmean'},{'peakF_filt','nanmean'},{'time_stimOnset','nanmean'},{'forceStim','mean'});
         
         % plot
         style.use('5fingers');
         
         subplot(1,3,1);
-        plt.line(D.numDigits,D.peakF_filt,'split',D.finger,'errorfcn','stderr','subset',D.stimulated==1);
-        plt.set('xlim',[0.5 5.5],'ylim',[0 4]);
-        plt.labels('# fingers stimulated','force (N)',sprintf('stimulated\ntrials'));
-        drawline(unique(T.forceStim),'dir','horz','linestyle',':','linewidth',1.5);
+        plt.line(D.numDigits,(D.peakF_filt./D.forceStim).*100,'split',D.finger,'errorfcn','stderr','subset',D.stimulated==1);
+        plt.set('xlim',[0.5 5.5],'ylim',[0 125]);
+        plt.labels('# fingers stimulated','% target force',sprintf('stimulated\ntrials'));
+        drawline(100,'dir','horz','linestyle',':','linewidth',1.5);
         legend off
         
         subplot(1,3,2);
-        plt.line(D.numDigits,D.peakF_raw,'split',D.finger,'errorfcn','stderr','subset',D.stimulated==0);
-        plt.set('xlim',[0.5 4.5],'ylim',[0 4]);
-        plt.labels('# fingers stimulated','force (N)',sprintf('non-stimulated\ntrials'));
-        drawline(unique(T.forceStim),'dir','horz','linestyle',':','linewidth',1.5);
-        plt.legend('east',{'thumb','index','middle','ring','little'});
+        plt.line(D.numDigits,(D.peakF_raw./D.forceStim).*100,'split',D.finger,'errorfcn','stderr','subset',D.stimulated==0);
+        plt.set('xlim',[0.5 4.5],'ylim',[0 125]);
+        plt.labels('# fingers stimulated','% target force',sprintf('non-stimulated\ntrials'));
+        drawline(100,'dir','horz','linestyle',':','linewidth',1.5);
         legend off
         
         subplot(1,3,3);
@@ -467,7 +498,46 @@ switch(what)
         plt.legend('east',{'thumb','index','middle','ring','little'});
         
         varargout = {D};
-    
+    case 'GROUP_taskPerformance'
+        % plots the percent correct trial responses (this is a little
+        % cheeky as most trials don't require a response so it is easy to
+        % get a high success rate)
+        sn = 1:6;
+        vararginoptions(varargin,{'sn'});
+        P = []; % percent correct
+        D = []; % d prime
+        for s = sn
+            p = pp1_imana('SUBJ_getTaskPerformance','sn',s);
+            d = pp1_imana('SUBJ_getDprime','sn',s);
+            P = addstruct(P,p);
+            D = addstruct(D,d);
+        end
+        P = tapply(P,{'sn','numDigits'},{'perErr','mean'}); % avg. across sessions and chords
+        subplot(1,5,[1:3]); % plot percent correct
+        sty = style.custom({[0 0 0] [0.5 0 0] [0.9 0 0] [1 0.6 0] [0.4 0.4 0.4]});
+        plt.dot(P.numDigits,1-P.perErr,'split',P.numDigits,'style',sty);
+        ylabel('% correct (all trial types)');
+        xlabel('number of fingers stimulated');
+        drawline(0.5,'dir','horz','linestyle',':');
+        ylim([0.25 1]);
+        
+        subplot(1,5,4); % plot % correct for mismatch trials
+        sty = style.custom({[0.6 0 0.6]});
+        plt.box([],1-D.perErr,'style',sty);
+        ylabel('% correct (mistmatch trials)');
+        set(gca,'xtick',[]);
+        drawline(0.5,'dir','horz','linestyle',':');
+        ylim([0.25 1]);
+
+        subplot(1,5,5); % plot d prime per subject (sort of meaningless without comparison group but whatever)
+        sty = style.custom({'blue'});
+        plt.dot([],D.dprime,'style',sty);
+        ylabel('d''');
+        title(sprintf('signal\ndetection'));
+        set(gca,'xtick',[]);
+        drawline(0,'dir','horz','linestyle',':');
+        varargout = {P,D};
+
     case '0' % ------------ PREP: preprocessing. Expand for more info. ----
         % The PREP cases are preprocessing cases. 
         % You should run these in the following order:
@@ -520,7 +590,7 @@ switch(what)
                     fprintf('importing FUNCTIONAL runs- %s\n',subj_name{sn});
                     pp1_imana('PREP_dicomImport','sn',s,'seriesType','functional','sess',i);
                     fprintf('concatinating 3d niftis to 4d per run\n');
-                    pp1_imana('PREP_make_4dNifti','sn',s);
+                    pp1_imana('PREP_make4dNifti','sn',s,'sess',i);
                 end
                 if ~isempty(fieldNum{i}{s})
                     fprintf('importing FIELDMAP runs- %s\n',subj_name{sn});
@@ -563,8 +633,10 @@ switch(what)
                 % Convert the data to nifti
                 spm_dicom_convert(HDR,'all','flat','nii');                  
                 cd ..
+            else
+                error('no files in directory. did you forget to update the dicomName for this session?')
             end
-            display(sprintf('Series %d done \n',seriesNum{sess}{sn}(i)))
+            fprintf('Series %d done \n\n',seriesNum{sess}{sn}(i))
         end
         % Display verbose messages to user. 
         % Lazy and won't include none-verbose version here.
@@ -998,9 +1070,17 @@ switch(what)
         % All functions can be called with ('WRAPPER_SURF','sn',[Subj#s]).
         % You can view reconstructed surfaces with Caret software.
         % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    case 'WRAPPER_SURF'                                                 
+    case 'WRAPPER_WB'                                                 
         vararginoptions(varargin,{'sn'});
-        % You can call this case to do all the freesurfer processing.
+        % You can call this case to do all the freesurfer & workbench processing.
+        % 'sn' can be an array of subjects.
+        for s = sn 
+            pp1_imana('SURF_freesurfer','sn',s);
+            pp1_imana('SURF_WBresample','sn',s);
+        end
+    case 'WRAPPER_CARET'                                                 
+        vararginoptions(varargin,{'sn'});
+        % You can call this case to do all the freesurfer & caret processing.
         % 'sn' can be an array of subjects.
         for s = sn 
             pp1_imana('SURF_freesurfer','sn',s);
@@ -1011,6 +1091,19 @@ switch(what)
     case 'SURF_freesurfer'   % run reconall   
         vararginoptions(varargin,{'sn'});
         freesurfer_reconall(freesurferDir,subj_name{sn},fullfile(anatomicalDir,subj_name{sn},[subj_name{sn} '_anatomical.nii']));
+    
+    case 'SURF_WBresample'   % Reslice indiv surfaces into fs_lr standard mesh
+        % This reslices from the individual surfaces into the the fs_lr
+        % standard mesh - This replaces calls to freesurfer_registerXhem,
+        % freesurfer_mapicosahedron_xhem, & caret_importfreesurfer. It
+        % requires connectome wb to be installed, added to the bash_profile
+        % (on terminal), and updated on the startup.m file
+        atlasDir = fullfile(atlasDir, 'standard_mesh');
+        vararginoptions(varargin, {'sn'});
+        fprintf('reslicing %s...',subj_name{sn});
+        surf_resliceFS2WB(subj_name{sn}, freesurferDir, wbDir,'resolution','32k'); 
+        fprintf('done\n');
+        
     case 'SURF_xhemireg'     % Cross-Register surfaces left / right hem  
         vararginoptions(varargin,{'sn'});
         freesurfer_registerXhem({subj_name{sn}},freesurferDir,'hemisphere',[1 2]); % For debug... [1 2] orig
@@ -1451,7 +1544,8 @@ switch(what)
                           [5.5018 15.717 d_hrf(3) d_hrf(4) 6.2265 d_hrf(6) d_hrf(7)],...
                           [4.986  15.452 d_hrf(3) d_hrf(4) 6.1327 d_hrf(6) d_hrf(7)],...
                           [5.0097 16.379 d_hrf(3) d_hrf(4) 5.6836 d_hrf(6) d_hrf(7)],...
-                          [4.9406 13.158 d_hrf(3) d_hrf(4) 2.6733 d_hrf(6) d_hrf(7)]};
+                          [4.9406 13.158 d_hrf(3) d_hrf(4) 2.6733 d_hrf(6) d_hrf(7)],...
+                          [4.1708 12.603 d_hrf(3) d_hrf(4) 4.6819 d_hrf(6) d_hrf(7)]};
         % Define number of regressors in glm
         switch glm 
             case 1
@@ -1735,68 +1829,68 @@ switch(what)
         %
         % See blurbs in each SEARCH case to understand what they do.
         % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -    
-    case 'WRAPPER_SEARCH'                                               
-        glm = 2;
-        vararginoptions(varargin,{'sn','glm'});
-        % You can call this case to do all the searchlight analyses.
-        % 'sn' can be an array of subjects because each processing case
-        % contained within loops through the subject array submitted to the
-        % case.
-        for s = sn 
-            for g = glm
-                pp1_imana('SEARCH_define','sn',s,'glm',g);
-                pp1_imana('SEARCH_run_LDC','sn',s,'glm',g);
-                pp1_imana('SEARCH_mapSurfLDC','sn',s,'glm',glm);
-            end
-        end
-        %fmri_imana('SEARCH_group_make');   % require group data
-        %fmri_imana('SEARCH_group_cSPM');
-    case 'SEARCH_define'                                                    % STEP 4.1   :  Defines searchlights for 120 voxels in grey matter surface
-        glm = 2;
-        vararginoptions(varargin,{'sn','glm'});
-        
-        mask       = fullfile(glmDir{glm},subj_name{sn},'mask.nii');
-        Vmask      = spm_vol(mask);
-        Vmask.data = spm_read_vols(Vmask);
-
-        LcaretDir = fullfile(caretDir,sprintf('x%s',subj_name{sn}),'LeftHem');
-        RcaretDir = fullfile(caretDir,sprintf('x%s',subj_name{sn}),'RightHem');
-        white     = {fullfile(LcaretDir,'lh.WHITE.coord'),fullfile(RcaretDir,'rh.WHITE.coord')};
-        pial      = {fullfile(LcaretDir,'lh.PIAL.coord'),fullfile(RcaretDir,'rh.PIAL.coord')};
-        topo      = {fullfile(LcaretDir,'lh.CLOSED.topo'),fullfile(RcaretDir,'rh.CLOSED.topo')};
-        S         = rsa_readSurf(white,pial,topo);
-
-        L = rsa.defineSearchlight_surface(S,Vmask,'sphere',[15 120]);
-        save(fullfile(anatomicalDir,subj_name{sn},sprintf('%s_searchlight_120.mat',subj_name{sn})),'-struct','L');
-    case 'SEARCH_run_LDC'                                                   % STEP 4.2   :  Runs LDC searchlight using defined searchlights (above)
-        % Requires java functionality unless running on SArbuckle's
-        % computer.
-        glm  = 2;
-        vararginoptions(varargin,{'sn','glm'});
-        
-        if glm==2
-            numConds = 31; % no errors modeled
-        elseif glm==3
-            numConds = 32; % error modeled
-        elseif glm==4
-            numConds = 32; % foot movement modeled
-        end
-        
-        block = 5e7;
-        cwd   = pwd;                                                        % copy current directory (to return to later)
-        % go to subject's glm directory 
-        cd(fullfile(glmDir{glm},subj_name{sn}));
-        % load their searchlight definitions and SPM file
-        L = load(fullfile(anatomicalDir,subj_name{sn},sprintf('%s_searchlight_120.mat',subj_name{sn})));
-        load SPM;
-        SPM  = spmj_move_rawdata(SPM,fullfile(imagingDir,subj_name{sn}));
-        name = sprintf('%s_glm%d',subj_name{sn},glm);
-        % make index vectors
-        conditionVec  = kron(ones(numel(SPM.Sess),1),[1:numConds]');
-        partitionVec  = kron([1:numel(SPM.Sess)]',ones(numConds,1));
-        % run the searchlight
-        rsa.runSearchlightLDC(L,'conditionVec',conditionVec,'partition',partitionVec,'analysisName',name,'idealBlock',block);
-        cd(cwd);
+%     case 'WRAPPER_SEARCH'                                               
+%         glm = 2;
+%         vararginoptions(varargin,{'sn','glm'});
+%         % You can call this case to do all the searchlight analyses.
+%         % 'sn' can be an array of subjects because each processing case
+%         % contained within loops through the subject array submitted to the
+%         % case.
+%         for s = sn 
+%             for g = glm
+%                 pp1_imana('SEARCH_define','sn',s,'glm',g);
+%                 pp1_imana('SEARCH_run_LDC','sn',s,'glm',g);
+%                 pp1_imana('SEARCH_mapSurfLDC','sn',s,'glm',glm);
+%             end
+%         end
+%         %fmri_imana('SEARCH_group_make');   % require group data
+%         %fmri_imana('SEARCH_group_cSPM');
+% %     case 'SEARCH_define'                                                    % STEP 4.1   :  Defines searchlights for 120 voxels in grey matter surface
+%         glm = 2;
+%         vararginoptions(varargin,{'sn','glm'});
+%         
+%         mask       = fullfile(glmDir{glm},subj_name{sn},'mask.nii');
+%         Vmask      = spm_vol(mask);
+%         Vmask.data = spm_read_vols(Vmask);
+% 
+%         LcaretDir = fullfile(caretDir,sprintf('x%s',subj_name{sn}),'LeftHem');
+%         RcaretDir = fullfile(caretDir,sprintf('x%s',subj_name{sn}),'RightHem');
+%         white     = {fullfile(LcaretDir,'lh.WHITE.coord'),fullfile(RcaretDir,'rh.WHITE.coord')};
+%         pial      = {fullfile(LcaretDir,'lh.PIAL.coord'),fullfile(RcaretDir,'rh.PIAL.coord')};
+%         topo      = {fullfile(LcaretDir,'lh.CLOSED.topo'),fullfile(RcaretDir,'rh.CLOSED.topo')};
+%         S         = rsa_readSurf(white,pial,topo);
+% 
+%         L = rsa.defineSearchlight_surface(S,Vmask,'sphere',[15 120]);
+%         save(fullfile(anatomicalDir,subj_name{sn},sprintf('%s_searchlight_120.mat',subj_name{sn})),'-struct','L');
+%     case 'SEARCH_run_LDC'                                                   % STEP 4.2   :  Runs LDC searchlight using defined searchlights (above)
+%         % Requires java functionality unless running on SArbuckle's
+%         % computer.
+%         glm  = 2;
+%         vararginoptions(varargin,{'sn','glm'});
+%         
+%         if glm==2
+%             numConds = 31; % no errors modeled
+%         elseif glm==3
+%             numConds = 32; % error modeled
+%         elseif glm==4
+%             numConds = 32; % foot movement modeled
+%         end
+%         
+%         block = 5e7;
+%         cwd   = pwd;                                                        % copy current directory (to return to later)
+%         % go to subject's glm directory 
+%         cd(fullfile(glmDir{glm},subj_name{sn}));
+%         % load their searchlight definitions and SPM file
+%         L = load(fullfile(anatomicalDir,subj_name{sn},sprintf('%s_searchlight_120.mat',subj_name{sn})));
+%         load SPM;
+%         SPM  = spmj_move_rawdata(SPM,fullfile(imagingDir,subj_name{sn}));
+%         name = sprintf('%s_glm%d',subj_name{sn},glm);
+%         % make index vectors
+%         conditionVec  = kron(ones(numel(SPM.Sess),1),[1:numConds]');
+%         partitionVec  = kron([1:numel(SPM.Sess)]',ones(numConds,1));
+%         % run the searchlight
+%         rsa.runSearchlightLDC(L,'conditionVec',conditionVec,'partition',partitionVec,'analysisName',name,'idealBlock',block);
+%         cd(cwd);
     case 'SEARCH_mapSurfLDC'                                                % STEP 4.3   :  Averaged LDC values for specified contrasts
         % Calls 'MISC_SEARCH_calculate_contrast'
         sn  = 1;
@@ -2006,6 +2100,62 @@ switch(what)
         %
         % See blurbs in each SEARCH case to understand what they do.
         % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    case 'ROI_makePaintFile' % defines rostral & caudal M1, ba 3a, 3b, 1, and 2, all cut to hand areas.                                                   
+    % Creates ROI boundaries on the group template/atlas (fsaverage_sym) for rostral and caudal M1.
+    % ROIs are defined using:
+    %       - probabilistic atlas
+    %       - boundaries for 4 major lobes
+    %       - flatmap coordinates for X Y coordinate restriction 
+    
+    for h=1:2 % loop over hemispheres
+        
+        % load previously defined M1 S1 rois, and probabilistic atlas (both
+        % found in caret group directory).
+        groupDir=[caretDir filesep 'fsaverage_sym'  filesep hemName{h} ];
+        cd(groupDir);
+        R  = caret_load('ROI.paint');                  
+		M  = caret_load([hem{h} '.propatlas.metric']); 
+		
+        % assign roi labels to verticies
+        Ba1 = M.data(:,1); 
+        Ba2 = M.data(:,2); 
+        B3a = M.data(:,3); 
+        B3b = M.data(:,4); 
+        rM1 = M.data(:,7); % BA4a
+        cM1 = M.data(:,8); % BA4p
+        
+        % cut these rois to fit within bounds of previously defined M1 & S1
+        % hand rois.
+        S1  = R.data==1;
+        M1  = R.data==2; 
+        Ba1(~S1) = 0;
+        Ba2(~S1) = 0;
+        B3a(~S1) = 0;
+        B3b(~S1) = 0;
+        rM1(~M1) = 0;
+        cM1(~M1) = 0;
+        
+        % vertex is assigned to roi based on max probabilitiy (above a
+        % threshold)
+        [Prop,ROI]     = max([B3a B3b Ba1 Ba2 rM1 cM1],[],2); 
+        ROI(Prop<0.25) = 0;
+        
+        % save paint files of the rois
+        areas = {{'ba3A'},{'ba3B'},{'ba1'},{'ba2'},{'rM1'},{'cM1'}};
+        names = {'ba3A','ba3B','ba1','ba2','rM1','cM1'};
+        color = [0 153 153;...      % ba3A
+                 0 89 171;...       % ba3B
+                 89 122 189;...     % ba1
+                 140 186 235;...    % ba2
+                 230 0 0;...        % rM1
+                 255 153 0];        % cM1
+            
+        Paint = caret_struct('paint','data',ROI,'paintnames',names,'column_name',{'ROI'});
+        caret_save(['ROI_pp1.paint'],Paint);
+        caret_combinePaint('ROI_pp1.paint','ROI_pp1.paint','ROI_pp1.areacolor',...
+            'areas',areas,'names',names,'colors',color);
+        
+    end    
     case 'ROI_makeBApaint'                                                  % Make paint file for brodmann area ROIs cut to hand area (saves as ROI_3.paint)
     % Modified from df1_imana. (in current state this is ugly..)
     % Creates ROI boundaries on the group template/atlas (fsaverage).
@@ -2068,6 +2218,7 @@ switch(what)
         caret_save('ROI_3.areacolor',M);
     end;        
     fprintf('Done.\n');
+    
     case 'ROI_define'                                                       % Define rois: BA rois, M1/S1 cut to hand area, BA rois cut to hand area
         % Define the ROIs of the group fsaverage atlas for each subject's
         % surface reconstruction. 
@@ -2075,26 +2226,33 @@ switch(what)
         % The save variable for each subject is a cell array of size
         % {1,#rois}. 
 
-        sn  = [1,3:7];
-        vararginoptions(varargin,{'sn'});
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        %vararginoptions(varargin,{'sn'});
 
         linedef = [5,0,1]; % take 5 steps along node between white (0) and pial (1) surfaces
         tmpMaskFile = {};  % for volumetric sub-cortical regions (these tmp masks are deleted after mapping to subject)
-        for s=sn
-            caretSubjDir = fullfile(caretDir,[atlasA subj_name{s}]);
-            mask         = fullfile(glmDir{1},subj_name{s},'mask.nii,1');  
+        for s = unique(I.sn)'
+            
+            caretSubjDir = fullfile(caretDir,[atlasA I.origSN{s}]);
+            mask         = fullfile(glmDir{1},I.origSN{s},'mask.nii,1');  
+            
             for h = 1:2 
-                D1 = caret_load(fullfile(caretDir,atlasname,hemName{h},['ROI_3.paint']));   % sBa1 sBa2 sB3a sB3b
+                
+                D1 = caret_load(fullfile(caretDir,atlasname,hemName{h},['ROI_pp1.paint'])); % ba3A, ba3B, ba1, ba2, rM1, cM1
                 D2 = caret_load(fullfile(caretDir,atlasname,hemName{h},['ROI.paint']));     % premade ROIs from fsaverage_sym: M1 and S1
-                D3 = caret_load(fullfile(caretDir,atlasname,hemName{h},['ROIsm.paint']));   % premade ROIs from fsaverage_sym: brodmann areas
+                
                 for r = 1:numregions
-                    if r<5; D = D1; rr = r;         % premade ROIs from fsaverage_sym: brodmann areas
-                    elseif r<7 D = D2; rr = r-4;    % premade ROIs from fsaverage_sym: S1 and M1
-                    else D = D3; rr = r-6; end      % sBa1 sBa2 sB3a sB3b: brodmann areas cut with S1 boundary
+                    if r<7; D = D1; rr = r;         % pp1 rois
+                    elseif (r==7 || r==7+numregions); D = D2; rr = 1;    % S1
+                    elseif (r==8 || r==8+numregions); D = D2; rr = 2;    % M1
+                    elseif (r==9 || r==9+numregions); D = D2; rr = 7;    % SPLa
+                    elseif (r==10 || r==10+numregions); D = D2; rr = 8;  % SPLp
+                    end
                     idx = r+(h-1)*numregions;
                     % make R region structure for participant
-                    R{idx}.name  = [subj_name{s} '_' regname{r} '_' hem{h}];
-                    if r<12 % cortical surface regions
+                    R{idx}.name  = [I.origSN{s} '_' regname{r} '_' hem{h}];
+                    if r<11 % cortical surface regions
                         R{idx}.type     = 'surf_nodes';
                         R{idx}.location = find(D.data(:,1)==rr);
                         R{idx}.white    = fullfile(caretSubjDir,hemName{h},[hem{h} '.WHITE.coord']);
@@ -2103,12 +2261,12 @@ switch(what)
                         R{idx}.linedef  = linedef;
                         R{idx}.flat     = fullfile(caretDir,'fsaverage_sym',hemName{h},[hem{h} '.FLAT.coord']);
                         R{idx}.image    = mask; % functional mask
-                    elseif r==12 % thalamus volumetric region
+                    elseif r==11 % thalamus volumetric region
                         if h==1; rr = 10; elseif h==2; rr = 49; end % 10 is left thalamus, 49 is right thalamus
                         R{idx}.type     = 'roi_image';
-                        R{idx}.file     = fullfile(scAnatDir,subj_name{s},sprintf('%s_%d_%d.nii',subj_name{s},h,rr));
+                        R{idx}.file     = fullfile(scAnatDir,I.origSN{s},sprintf('%s_%d_%d.nii',I.origSN{s},h,rr));
                         R{idx}.value    = 1;
-                        R{idx}.image    = fullfile(glmDir{1},subj_name{s},sprintf('mask_tmp%d%d.nii',h,rr)); % functional mask
+                        R{idx}.image    = fullfile(glmDir{1},I.origSN{s},sprintf('mask_tmp%d%d.nii',h,rr)); % functional mask
                         % make temporary functional mask of thalamus
                         % This is done b/c region_calcregions assumes mask
                         % is same dimension as roi image. Thus,
@@ -2126,191 +2284,17 @@ switch(what)
                     end
                 end    
             end
-            R = region_calcregions(R,'exclude',[2,6; 5,6],'exclude_thres',0.75);
+            %R = region_calcregions(R,'exclude',[2,6; 5,6],'exclude_thres',0.75);
+            exculdeRoi = [1,5; 1,6; 2,5; 2,6; 3,5; 3,6; 7,8];
+            R = region_calcregions(R,'exclude',[exculdeRoi; exculdeRoi+numregions],'exclude_thres',0.75);
             cd(regDir);
-            save(['regions_' subj_name{s} '.mat'],'R');
-            fprintf('\n %s done\n',subj_name{s})
+            save(['regions_' I.origSN{s} '.mat'],'R');
+            fprintf('\n %s done\n',I.origSN{s})
             clear R
         end
         for i = 1:numel(tmpMaskFile) 
             delete(tmpMaskFile{i});
         end
-    case 'ROI_makePaint'                                                    % STEP 5.1   :  Make paint file for ROIs (saves as ROI_2.paint)
-    % Modified from df1_imana. (in current state this is ugly..)
-    % Creates ROI boundaries on the group template/atlas (fsaverage).
-    % ROIs are defined using:
-    %       - probabilistic atlas
-    %       - boundaries for 4 major lobes
-    %       - group surface searchlight results
-    %       - flatmap coordinates for X Y coordinate restriction 
-    
-    for h=1:2 % loop over hemispheres
-        % - - - - - - - - - - - - Load some files - - - - - - - - - - - - -
-        groupDir=[caretDir filesep 'fsaverage_sym'  filesep hemName{h} ];
-        cd(groupDir);
-        P    = caret_load([hem{h} '.lobes.paint']);                  % paint file of 4 major lobes (1 = col 2 of paintnames)
-        % A  = caret_load('ROI.paint');                             % ROI.paint file from ??- file has nice, standard ROIs for motor, sensory, aux. rois, and some visual rois: Naveed maybe made this?
-        C    = caret_load([hem{h} '.FLAT.coord']);                   % Caret flatmap (for X Y coordinate restrictions)
-		M    = caret_load([hem{h} '.propatlas.metric']);             % probabilistic atlas
-		% Load searchlight metrics
-		Avg  = caret_load([hem{h} '.group_avg_3_stats.metric']);     % group surface searchlight results (FAST glm)- data(:,10) is group avg LDC
-		Dgt  = caret_load([hem{h} '.group_digit_3_stats.metric']);   % group surface searchlight results, contrasted for distance b/t fingers, independent of pressing speed
-		Spd  = caret_load([hem{h} '.group_speed_3_stats.metric']);   % group surface searchlight results, contrasted for distance b/t pressing speeds, independent of fingers
-        % Make index for voxels that are speed-specific or digit-specific from Dgt and Spd metrics (loaded above)
-		Didx = logical(Dgt.data(:,10)>Spd.data(:,10));				 % index for voxels that demonstrate greater sensitivity (distance) between fingers than speeds
-		Sidx = logical(Spd.data(:,10)>Dgt.data(:,10));		         % index for voxels that demonstrate greater sensitivity (distance) between speeds than fingers
-		
-        % - - - - - - - - - - Assign roi labels to vertices - - - - - - - -
-        % get data for new rois (from probability atlas)
-        M1  = sum(M.data(:,[7,8]),2); % M1 is BA4a + 4p
-        S1  = sum(M.data(:,[1:4]),2); % S1 is BA1 + 2 + 3a + 3b
-        MT  = M.data(:,10);         
-        SMA = M.data(:,9);           
-        V1  = M.data(:,12);
-        V2  = M.data(:,13);
-        Ba1 = M.data(:,1);
-        Ba2 = M.data(:,2);
-        B3a = M.data(:,3);
-        B3b = M.data(:,4);
-        ALL = ones(size(M.data,1),1);       % takes all vertices available (full cortex roi)- is for UWO BrainHack dataset, not analyses
-        
-        % coordinate is ROI w/ for which it has greatest associated probability
-        [Prop,ROI]   = max([S1 M1 SMA MT V1 V2],[],2); 
-                    % ROI-> 1...2..3..4..5...6  
-        [Prop3,ROI3] = max([Ba1 Ba2 B3a B3b],[],2);
-                    % ROI->  7...8...9..10
-
-        % Define ROIS with:
-        %...cytoarchitectonic prob (>0.2) - - - - - - - - - - - - - - - - -
-            ROI(Prop<0.2)   = 0;
-            ROI3(Prop3<0.2) = 0;
-        %...boundaries of 4 major lobes (F.P.O.T.)- - - - - - - - - - - - -
-            ROI(ROI==1 & P.data~=2 & Prop<0.25)    = 0;  % sS1  :  parietal and higher prob
-            ROI(ROI==2 & P.data~=1 & Prop<0.25)    = 0;  % sM1  :  frontal and higher prob
-            ROI(ROI==3 & P.data~=1)                = 0;  % sSMA :  frontal
-            ROI(ROI==4 & P.data~=2)                = 0;  % sMT  :  frontal
-            ROI(ROI==5 & P.data~=3)                = 0;  % sV1  :  occipital
-            ROI(ROI==6 & P.data~=3)                = 0;  % sV2  :  occipital
-            ROI3(ROI3==1 & P.data~=2)              = 0;  % Ba1  :  parietal
-            ROI3(ROI3==2 & P.data~=2)              = 0;  % Ba2  :  parietal
-            ROI3(ROI3==3 & P.data~=2)              = 0;  % B3a  :  parietal
-            ROI3(ROI3==4 & P.data~=2)              = 0;  % B3b  :  parietal
-
-        %...average distances of all condition pairs (for SMA, MT, V1, and V2)
-        % (and the flatmap coords for left hemi rois)
-        switch h   % hemispheres
-            case 1 % left  
-                ROI(ROI==1 & Avg.data(:,10)<0.15)    = 0;  % sS1- these dissimiarlity cutoffs lead to ROIs that focus on hand knob M1 S1
-                ROI(ROI==2 & Avg.data(:,10)<0.15)    = 0;  % sM1
-                ROI(ROI==3 & Avg.data(:,10)<0.1)     = 0;  % sSMA
-                ROI(ROI==4 & Avg.data(:,10)<0.1)     = 0;  % sMT
-                ROI(ROI==5 & Avg.data(:,10)<0.1)     = 0;  % sV1
-                ROI(ROI==6 & Avg.data(:,10)<0.1)     = 0;  % sV2
-                
-                %...flatmap X Y coordinates - - - - - - - - - - - - - - - -
-                % SMAcoords
-                    % Y coords
-                    ROI(ROI==3 & C.data(:,2)>42)   = 0;
-                    ROI(ROI==3 & C.data(:,2)<25)   = 0;
-                    % X coords
-                    ROI(ROI==3 & C.data(:,1)<-42)  = 0;
-                    ROI(ROI==3 & C.data(:,1)>-21)  = 0;   
-                % M1 (little blob near temporal lobe that still persists)
-                    ROI(ROI==2 & C.data(:,2)<-1.5) = 0;
-				
-				% make speed or finger-sensitive rois within already defined sS1 and sM1.
-                ROI4 = ROI;			% for making digit and speed- specific voxel selections within S1 and M1
-                ROI4(ROI4==3 | ROI4==4 | ROI4==5 | ROI4==6) = 0;
-				ROI4(ROI==1 & Didx) 			   = 1;	   % sS1 :  finger-sensitive
-				ROI4(ROI==1 & Sidx)                = 2;	   % sS1 :  speed-sensitive
-				ROI4(ROI==2 & Didx)                = 3;	   % sM1 :  |finger-sensitive
-				ROI4(ROI==2 & Sidx)			       = 4;    % sM1 :  speed-sensitive
-            case 2 % right 
-                ROI(ROI==1 & Avg.data(:,10)<0.08)    = 0;  % sS1
-                ROI(ROI==2 & Avg.data(:,10)<0.07)    = 0;  % sM1
-                %ROI(ROI==3 & Avg.data(:,10)<0.001)=0;     % sSMA- most voxels don't survive distance criteria in right hemi
-                ROI(ROI==4 & Avg.data(:,10)<0.05)    = 0;  % sMT
-                ROI(ROI==5 & Avg.data(:,10)<0.05)    = 0;  % sV1
-                ROI(ROI==6 & Avg.data(:,10)<0.05)    = 0;  % sV2
-        end;
-        
-        % - - - - - - - - - - - Save ROIpaint files - - - - - - - - - - - -  
-        % Save Paint files for first six ROIs - - - - - - - - - - - - - - -
-        areas{1}{1}  = {'sS1'}; 
-        areas{2}{1}  = {'sM1'}; 
-        areas{3}{1}  = {'sSMA'}; 
-        areas{4}{1}  = {'sMT'};
-        areas{5}{1}  = {'sV1'}; 
-        areas{6}{1}  = {'sV2'}; 
-        names        = {'sS1','sM1','sSMA','sMT','sV1','sV2'};
-        
-        colors=[255 0 0;...  % sS1
-            0 255 0;...      % sM1
-            0 0 255;...      % sSMA
-            160 0 160;...    % sMT
-            75 150 0;...     % sV1
-            200 0 100];      % sV2
-            
-        Paint = caret_struct('paint','data',ROI,'paintnames',names,'column_name',{'ROI'});
-        caret_save(['ROI_2.paint'],Paint);
-        caret_combinePaint('ROI_2.paint','ROI_2.paint','ROI_2.areacolor',...
-            'areas',areas,'names',names,'colors',colors);
-        
-        % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        % Save paint file for Ba1:3b (cannot index same vertex for many
-        % rois in same file..or at least not sure how to do so
-        % currently)-SA
-        clear areas colors names Paint
-        areas{1}{1} = {'sBa1'}; 
-        areas{2}{1} = {'sBa2'}; 
-        areas{3}{1} = {'sB3a'}; 
-        areas{4}{1} = {'sB3b'};
-        
-        names = {'sBa1','sBa2','sB3a','sB3b'};
-        
-        colors = [0 100 200;... % Ba1
-            255 255 0;...       % Ba2
-            150 50 255;...      % Ba3
-            0 153 153];         % Ba3b
-        
-        Paint = caret_struct('paint','data',ROI3,'paintnames',names,'column_name',{'ROI'});
-        caret_save(['ROI_3.paint'],Paint);
-        caret_combinePaint('ROI_3.paint','ROI_3.paint','ROI_3.areacolor',...
-            'areas',areas,'names',names,'colors',colors);
-        
-		% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        % Save finger and speed-sensitive M1 and S1 rois
-        clear areas colors names Paint
-        areas{1}{1} = {'sS1_digit'}; 
-        areas{2}{1} = {'sS1_speed'}; 
-        areas{3}{1} = {'sM1_digit'}; 
-        areas{4}{1} = {'sM1_speed'};
-        
-        names = {'sS1_digit','sS1_speed','sM1_digit','sM1_speed'};
-        
-        colors = [0 100 200;... % sS1_digit
-            255 255 0;...       % sS1_speed
-            150 50 255;...      % sM1_digit
-            0 153 153];         % sM1_speed
-        
-        Paint = caret_struct('paint','data',ROI4,'paintnames',names,'column_name',{'ROI'});
-        caret_save(['ROI_4.paint'],Paint);
-        caret_combinePaint('ROI_4.paint','ROI_4.paint','ROI_4.areacolor',...
-            'areas',areas,'names',names,'colors',colors);
-        
-        % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        % Save full cortex roi (used to harvest full brain dataset for
-        % brainhack event).
-        clear areas colors names Paint
-        areas{1}{1} = {'Cortex'};
-        names       = {'Cortex'};
-        colors      = [255 0 0];
-        Paint       = caret_struct('paint','data',ALL,'paintnames',names,'column_name',{'ROI'});
-        caret_save(['ROI_all.paint'],Paint);
-        caret_combinePaint('ROI_all.paint','ROI_all.paint','ROI_all.areacolor',...
-            'areas',areas,'names',names,'colors',colors);
-        
-    end;    
     
     case 'ROI_getTimeseries'                                                % (optional) :  Harvest ROI timeseries for specified region.
         % Use this and 'ROI_plot_timeseries' to ensure good GLM fits with
@@ -2607,23 +2591,27 @@ switch(what)
         %__________________________________________________________________
         
     case 'ROI_getBetas'                                                     % STEP 5.3   :  Harvest activity patterns from specified rois
-        glm = 2;
-        sn  = 1;
-        roi = [1:8,13:20];
+        
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        
+        glm = 3;
+        roi = [1:10,12:21];
         append = 0; % just add betas to currently existing datastructure
         vararginoptions(varargin,{'sn','glm','roi','append'});
+        
         excludeROIs = [];%[12,24];
         T=[];
         if append
             T = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm))); % loads region data (T)
         end
         % harvest
-        for s=sn % for each subj
+        for s=unique(I.sn)' % for each subj
             fprintf('\nSubject: %d\n',s) % output to user
             
             % load files
-            load(fullfile(glmDir{glm}, subj_name{s},'SPM.mat'));  % load subject's SPM data structure (SPM struct)
-            D = load(fullfile(glmDir{glm}, subj_name{s},'SPM_info.mat'));
+            load(fullfile(glmDir{glm}, I.origSN{s},'SPM.mat'));  % load subject's SPM data structure (SPM struct)
+            D = load(fullfile(glmDir{glm}, I.origSN{s},'SPM_info.mat'));
             load(fullfile(regDir,sprintf('regions_%s.mat',subj_name{s})));          % load subject's region parcellation & depth structure (R)
             
             % add percent signal change imgs for subject
@@ -2634,7 +2622,7 @@ switch(what)
                 numImgs = 32; 
             end
             for q = 1:numImgs
-                Q{q} = (fullfile(glmDir{glm}, subj_name{s}, sprintf('psc_%02d.nii',q))); 
+                Q{q} = (fullfile(glmDir{glm}, I.origSN{s}, sprintf('psc_%02d.nii',q))); 
             end
             Q = spm_vol(char(Q));
             
@@ -2642,7 +2630,7 @@ switch(what)
             V = SPM.xY.VY; 
 
             % remove run means from patterns
-            C0   = indicatorMatrix('identity',D.run); 
+            C0         = indicatorMatrix('identity',D.run); 
             ofInterest = 1:size(C0,1); % indicies for regressors of interest
             
             for r = roi % for each region
@@ -2684,10 +2672,47 @@ switch(what)
         % save T
         save(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm)),'-struct','T'); 
         fprintf('\n')
+    case 'ROI_nnClassify'
+        % do nearest neighbour classifications. Also estimate chance level
+        numIters = 1000; % number of chance shuffles
+        betas    = varargin{1};
+        condVec  = varargin{2};
+        runVec   = varargin{3};
+        
+        % reorient betas, condVec, & runVec to column vectors (function
+        % requires these dimensions)
+        runs    = unique(runVec);
+        conds   = unique(condVec);
+        numRuns = numel(runs);
+        numConds= numel(conds); 
+        betas   = betas';
+        condVec = condVec';
+        runVec  = runVec';
+        % estimate chance level
+        chanceAcc = nan(numIters,1);
+        for ii = 1:numIters
+            % shuffle condition labels within each run
+            shuffledCondVec = sample_wor(conds',numConds,numRuns);
+            shuffledCondVec = shuffledCondVec(:)';
+            % do classification with shuffled labels
+            chanceAcc(ii) = crossval_classify(@classify_NearestNeighbour,betas,shuffledCondVec,runVec);
+        end
+        
+        % estimate actual classification accuracy (across conditions)
+        estAcc    = crossval_classify(@classify_NearestNeighbour,betas,condVec,runVec);
+        pval      = 1-(find(estAcc<=sort(chanceAcc),1)/numIters); % proportion of chance accuracies greater than estimated accuracy
+        chanceAcc = mean(chanceAcc);
+        if isempty(pval)
+            pval = realmin;
+        end
+        
+        varargout = {estAcc,chanceAcc,pval};
+        
     case 'ROI_stats'                                                        % STEP 5.4   :  Calculate stats/distances on activity patterns
-        glm = 2;
-        sn  = 1:5;
-        vararginoptions(varargin,{'sn','glm'});
+        glm = 3;
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        vararginoptions(varargin,{'glm'});
         % housekeeping
         numDigits = stimulationChords;
         numDigits = sum(numDigits,2)';
@@ -2703,7 +2728,7 @@ switch(what)
         T   = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm))); % loads region data (T)
         roi = unique(T.roi)';
         % do stats
-        for s = sn % for each subject
+        for s = unique(I.sn)' % for each subject
             D  = load(fullfile(glmDir{glm}, subj_name{s}, 'SPM_info.mat'));   % load subject's trial structure
             C0 = indicatorMatrix('identity',D.run);
             fprintf('\nSubject: %d\n',s)
@@ -2720,11 +2745,25 @@ switch(what)
                 So.sig       = rsa_vectorizeIPM(Sig);
                 So.G         = rsa_vectorizeIPM(G);
                 So.G_wmean   = rsa_vectorizeIPM(pcm_estGCrossval(betaW(ofInterest,:),D.run,D.tt));
+                % calculate empirical G (not cv)
+                tmp.betaW    = betaW_nmean;
+                tmp.tt       = D.tt;
+                tmp          = tapply(tmp,{'tt'},{'betaW','mean'});
+                So.G_emp     = rsa_vectorizeIPM(cov(tmp.betaW')); 
                 % squared dissimilarities
                 So.ldc_wmean = rsa.distanceLDC(betaW,D.run,D.tt);        % rdm crossvalidated, on patterns without run mean patterns removed
                 So.ldc       = rsa.distanceLDC(betaW_nmean,D.run,D.tt);  % rdm crossvalidated, patterns with run means removed
+                % do condition classification for all chords (NOTE: this pools data across sessions)
+                H = D;
+                H.beta = betaW;
+                H  = getrow(H,H.chord<32);
+                [So.nnEstAcc,So.nnChanceAcc,So.nnPval] = pp1_imana('ROI_nnClassify',H.beta,H.chord,H.run);
+                % do condition classification for single fingers 
+                H  = getrow(H,H.chord<6);
+                [So.nnEstAccSF,So.nnChanceAccSF,So.nnPvalSF] = pp1_imana('ROI_nnClassify',H.beta,H.chord,H.run);
+                
                 % PSC
-                So.psc       = nanmean(S.psc{1},2)';
+                So.psc = nanmean(S.psc{1},2)';
                 if glm==2 % only regressors for chords
                     So.psc_chord = [1:31]; 
                     So.psc_numD  = numDigits;
@@ -2776,82 +2815,7 @@ switch(what)
         save(fullfile(regDir,sprintf('glm%d_reg_TnumDigits.mat',glm)),'-struct','Td');
         fprintf('done.\n')
    
-    case 'ROI_pattConsist'                                                  % (optional) :  Calculates pattern consistencies for each subject in roi across glms.
-        % Pattern consistency is a measure of the proportion of explained
-        % beta variance across runs within conditions. 
-        % 
-        % This stat is useful for determining which GLM model yeilds least
-        % variable beta estimates. That GLM should be the one you use for
-        % future analysis cases.
-
-        glm = 4;
-        sn  = 1;
-        roi = 5; % default contra S1 (lh)
-        removeMean = 1;
-        betaType = 3; % 1: raw, 2: uni-whitened, 3: multi-whitened
-        vararginoptions(varargin,{'sn','glm','roi','removeMean','betaType'});
-        
-        % consistencies only calculate for chord regressors, regardless of
-        % any other foot/error regressors included in model.
-        
-        R = []; % output structure
-
-        for g = glm
-            T = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',g))); % loads in struct 'T'
-            % number of conditions per glm
-            if g==2
-                %conds = [1:31]';
-                conds = [1:5,zeros(1,26)]';
-            elseif g==3
-                %conds = [1:31,0]';
-                conds = [1:5,zeros(1,26),0]';
-            elseif g==4
-                %conds = [1:31,0]';
-                conds = [1:5,zeros(1,26),0]';
-            end
-            
-            for r = roi
-
-                for s = sn
-                    
-                    % % Calculate pattern consistency (avg. across
-                    % conditions) for each roi, each subj, each glm:
-                    % - get corresponding data from beta structure
-                    % - index patterns for conditions and runs
-                    % - exclude any foot/error/intercept regressors
-                    % - calculate non-CV pattern consistency
-                    
-                    S = getrow(T,(T.sn==s & T.roi==r));
-                    runs = unique(S.run{1});
-                    switch betaType 
-                        case 1 % raw betas
-                            betas = S.raw_beta{1};
-                        case 2 % univariately prewhitened betas
-                            betas = S.betaUW{1};
-                        case 3 % multivariately prewhitened betas
-                            betas = S.betaW{1};
-                    end
-                    % make vectors for pattern consistency func
-                    condVec = kron(ones(numel(runs),1),conds);
-                    partVec = kron(runs',ones(length(conds),1));
-                    partVec(condVec==0) = 0;
-                    % calculate the pattern consistency
-                    rs.r2  = rsa_patternConsistency(betas,partVec,condVec,'removeMean',removeMean);
-                    rs.sn  = s;
-                    rs.roi = r;
-                    rs.glm = g;
-                    rs.betaType = betaType;
-                    rs.removeMean = removeMean;
-                    R = addstruct(R,rs);
-                end
-            end
-        end
-        pivottable(R.glm,R.sn,R.r2,'mean','numformat','%0.4f');
-        varargout = {R};
-        % output arranged such that each row is an roi, each col is subj
-        
-        %_______________
-    case 'ROI_pattConsistCV'                                                % (optional) :  Calculates pattern consistencies for each subject in roi across glms.
+    case 'ROI_pattConsist'                                                
         % Crossvalidated Pattern consistency is a measure of the proportion of explained
         % beta variance across runs within conditions. 
         % 
@@ -2859,97 +2823,61 @@ switch(what)
         % variable beta estimates. That GLM should be the one you use for
         % future analysis cases.
 
-        glm = 4;
-        sn  = 1;
-        roi = 5; % default contra S1 (lh)
+        glm = 3;
+        sn  = 1:6;
+        roi = 1:8;
         removeMean = 1;
-        betaType = 3; % 1: raw, 2: uni-whitened, 3: multi-whitened
-        vararginoptions(varargin,{'sn','glm','roi','removeMean','betaType'});
+        conds = 1:31;
+        vararginoptions(varargin,{'sn','glm','roi','removeMean'});
         
-        % consistencies only calculate for chord regressors, regardless of
-        % any other foot/error regressors included in model.
-        
+        % % Calculate pattern consistency for each roi, each subj.
+        % Do so separately per session per subject.
         R = []; % output structure
-
         for g = glm
             T = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',g))); % loads in struct 'T'
-            % number of conditions per glm
-            if g==2
-                %conds = [1:31]';
-                conds = [1:5,zeros(1,26)]';
-            elseif g==3
-                %conds = [1:31,0]';
-                conds = [1:5,zeros(1,26),0]';
-            elseif g==4
-                %conds = [1:31,0]';
-                conds = [1:5,zeros(1,26),0]';
-            end
-            
             for r = roi
-
                 for s = sn
-                    
-                    % % Calculate pattern consistency (avg. across
-                    % conditions) for each roi, each subj, each glm:
-                    % - get corresponding data from beta structure
-                    % - index patterns for conditions and runs
-                    % - exclude any foot/error/intercept regressors
-                    % - calculate non-CV pattern consistency
-                    
-                    S = getrow(T,(T.sn==s & T.roi==r));
-                    runs = unique(S.run{1});
-                    switch betaType 
-                        case 1 % raw betas
-                            betas = S.raw_beta{1};
-                        case 2 % univariately prewhitened betas
-                            betas = S.betaUW{1};
-                        case 3 % multivariately prewhitened betas
-                            betas = S.betaW{1};
-                    end
-                    % make vectors for pattern consistency func
-                    condVec = kron(ones(numel(runs),1),conds);
-                    partVec = kron(runs',ones(length(conds),1));
-                    partVec(condVec==0) = 0;
-                    % calculate the pattern consistency
-                    [rs.r2,rs.r] = rsa_patternConsistency_crossval(betas,partVec,condVec,'removeMean',removeMean);
-                    rs.sn  = s;
-                    rs.roi = r;
-                    rs.glm = g;
-                    rs.betaType = betaType;
-                    rs.removeMean = removeMean;
-                    R = addstruct(R,rs);
+                    % get subj data
+                    S      = getrow(T,(T.sn==s & T.roi==r));
+                    b      = [];
+                    b.beta = S.raw_beta{1};
+                    b.run  = S.run{1};
+                    b.tt   = S.tt{1};
+                    b.sess = zeros(size(b.run));
+                    b.sess(ismember(b.run,run{1}{s})) = 1;
+                    b.sess(ismember(b.run,run{2}{s})) = 2;
+                    b      = getrow(b,ismember(b.tt,conds)); % restrict to specific conditions
+                    %for ii = 1:2 % per session
+                    bs = b;    
+                    %bs = getrow(b,b.sess==ii);
+                        % calculate the pattern consistency
+                        rs.r2              = rsa_patternConsistency(bs.beta,bs.run,bs.tt,'removeMean',removeMean);
+                        [rs.r2_cv,rs.r_cv] = rsa_patternConsistency_crossval(bs.beta,bs.run,bs.tt,'removeMean',removeMean);
+                        rs.sn              = s;
+                        rs.roi             = r;
+                        rs.glm             = g;
+                        rs.numConds        = numel(conds);
+                        rs.passive         = 1;
+                        %rs.sess            = ii;
+                        rs.removeMean      = removeMean;
+                        R = addstruct(R,rs);
+                    %end
                 end
             end
         end
-        pivottable(R.glm,R.sn,R.r2,'mean','numformat','%0.4f');
-        pivottable(R.glm,R.sn,R.r,'mean','numformat','%0.4f');
+        %pivottable(R.glm,R.sn,R.r2,'mean','numformat','%0.4f');
+        %pivottable(R.glm,R.sn,R.r2_cv,'mean','numformat','%0.4f');
         varargout = {R};
         % output arranged such that each row is an roi, each col is subj
-        
-        %_______________
     
-    case 'ROI_dist_stability'                                               % (optional) :  Correlate distances of conditions in roi across subjects. 
-        glm = 1;
-        roi = 2; % default primary motor cortex
-        % Correlate distances of conditions in roi across subjs.
-        % Regression line is not forced through origin so ignores distance 
-        % scaling across subjects.
-        vararginoptions(varargin,{'roi','glm'});
-        
-        D   = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));      
-        D   = getrow(D,D.region==roi);
-        Cs  = corr(D.RDM');
-        
-        varargout = {Cs};
     case 'ROI_MDS_overall'                                                  % (optional) :  Plots the scaled representational structure. 
         % enter region, glm #, sn (if desired)
         cplot = 'one';
-        glm   = 2;
+        glm   = 3;
         roi   = 5; % default primary sensory cortex   
         sn    = 1;
         clrCode = 0; % if >0, color all chords with digit X red, and all other chords black.
-        fig = [];
-        vararginoptions(varargin,{'roi','glm','cplot','clrCode','sn','fig'});
+        vararginoptions(varargin,{'roi','glm','cplot','clrCode','sn'});
         % cplot = 'all' to plot all 4 MDS figures (i.e. no contrast and 3 contrasts)- default
         % cplot = 'one'  to plot only no contrast MDS figure        
 
@@ -3015,7 +2943,7 @@ switch(what)
                 
             case 'one' % only do and plot no contrast MDS
                 Y{1} = rsa_classicalMDS(IPM,'mode','IPM');
-                pp1_imana('MISC_scatterplotMDS',Y{1}(1:end,1:3),'split',split,'label',[1:31]','fig',fig);
+                pp1_imana('MISC_scatterplotMDS',Y{1}(1:end,1:3),'split',split,'label',[1:31]');
         end
 %         keyboard
     
@@ -3076,6 +3004,20 @@ switch(what)
                     runs       = runs(~oddRuns);
                     sess       = sess(~oddRuns);
                     partitions = [{runs(sess==1)},{runs(sess==2)}];
+                case 'sess_cv_evenOdd' % compare even splits sess 1 to odd splits sess 2
+                    sess1      = [cell2mat(run{1}(sn))];
+                    sess2      = [cell2mat(run{2}(sn))];
+                    runs       = [sess1 sess2];
+                    sess       = [ones(1,length(sess1)) ones(1,length(sess2)).*2];
+                    oddRuns    = logical(mod(runs,2));
+                    partitions = [{runs(sess==1 & ~oddRuns)},{runs(sess==2 & oddRuns)}];
+                case 'sess_cv_oddEven' % compare odd splits sess 1 to Even splits sess 2
+                    sess1      = [cell2mat(run{1}(sn))];
+                    sess2      = [cell2mat(run{2}(sn))];
+                    runs       = [sess1 sess2];
+                    sess       = [ones(1,length(sess1)) ones(1,length(sess2)).*2];
+                    oddRuns    = logical(mod(runs,2));
+                    partitions = [{runs(sess==1 & oddRuns)},{runs(sess==2 & ~oddRuns)}];
                 case 'sess1'   % odd-even split within session 1
                     runs       = cell2mat(run{1}(sn));
                     oddRuns    = logical(mod(runs,2));
@@ -3134,8 +3076,8 @@ switch(what)
         % corr(A_s1,A_s2) = r_A
         % corr(B_s1,B_s2) = r_B
         % ssqrt(r_s1 * r_s2) vs. ssqrt(r_A * r_B)
-        sn  = 2;
-        glm = 2;
+        sn  = 1:6;
+        glm = 3;
         roi = 5;
         vararginoptions(varargin,{'roi','glm','sn'});
         
@@ -3145,10 +3087,12 @@ switch(what)
         
         R = [];
         for s = sn
-            r_s1 = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'split','sess1','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
-            r_s2 = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'split','sess2','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
-            r_A  = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'split','sess_cv_odd','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
-            r_B  = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'split','sess_cv_even','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
+            r_s1 = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'glm',glm,'split','sess1','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
+            r_s2 = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'glm',glm,'split','sess2','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
+            r_A  = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'glm',glm,'split','sess_cv_odd','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
+            r_B  = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'glm',glm,'split','sess_cv_even','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
+            %r_C  = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'glm',glm,'split','sess_cv_oddEven','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
+            %r_D  = pp1_imana('ROI_patternReliability','sn',s,'roi',roi,'glm',glm,'split','sess_cv_evenOdd','mean_subtract',mean_sub,'betaType',betaType,'conds',conds);
             % keep only within condition comparisons:
             r_s1 = getrow(r_s1,r_s1.type==1);
             r_s2 = getrow(r_s2,r_s2.type==1);
@@ -3165,8 +3109,315 @@ switch(what)
             R = addstruct(R,r);
         end
         % plt.dot(R.sn,R.corr,'split',R.type);
+        %save(fullfile(regDir,sprintf('patternReliability_roi%d_glm%d.mat',roi,glm)),'-struct','R');
         varargout = {R};
+    
+    case 'ROI_getChordPSC'
+        % makes a nearly-universal plotting structure from ROI_stats output
+        glm = 3;
+        vararginoptions(varargin,{'glm'});
+        % load data
+        T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
+        D = [];
+        d = [];
+        v = ones(size(T.psc,2),1);
+        for i = 1:size(T.sn,1)
+            d.psc       = T.psc(i,:)';
+            d.chord     = T.psc_chord(i,:)';
+            d.numDigits = T.psc_numD(i,:)';
+            d.roi       = v.*T.roi(i);
+            d.sn        = v.*T.sn(i);
+            D = addstruct(D,d);
+            d = [];
+        end
+        varargout = {D};
+    case 'ROI_getSingleFingerRatio'
+        glm = 3;
+        vararginoptions(varargin,{'glm'});
+        % calculate variance-to-covarance of single finger second moment
+        % per subject per roi:
+        if glm==2
+            Gtmp = zeros(31);
+        elseif glm==3
+            Gtmp = zeros(32); % account for thumb response condition
+        end
+        Gtmp(1:5,1:5) = eye(5);
+        varIdx   = logical(rsa_vectorizeIPM(Gtmp));
+        Gtmp(1:5,1:5) = ones(5)-eye(5);
+        covarIdx = logical(rsa_vectorizeIPM(Gtmp));
+        % load data
+        T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
+        D.sn  = T.sn;
+        D.roi = T.roi;
+        var     = mean(T.G(:,varIdx),2);
+        covar   = mean(T.G(:,covarIdx),2);
+        D.ratio = var./covar;
+        varargout = {D};
+    
+    case 'calcFstat'
+        % calculates F-statistic per voxel to determine if voxel is
+        % significantly modulated by finger(s)
+        X        = varargin{1}; % C*RxN matrix of data.
+        runVec   = varargin{2};
+        condVec  = varargin{3};
+        % housekeeping
+        numVox   = size(X,2);
+        numCond  = length(unique(condVec));
+        numRun   = length(unique(runVec));
+        % calc F-stat per voxel
+        C0  = indicatorMatrix('identity',runVec);
+        X0  = X - C0*pinv(C0)*X; % remove run means
+        A   = zeros(numCond,numVox,numRun);
+        ApredCV = A;
+        for i = 1:numRun
+            A(:,:,i) = X0(runVec==i,:);
+        end
+        runs = 1:numRun;
+        for i = 1:numRun
+            testRuns = runs~=i;
+            ApredCV(:,:,i) = mean(A(:,:,testRuns),3);
+        end
+
+        % non-crossval f-stat
+        Apred = repmat(mean(A,3),1,1,numRun); % predicted voxel tunings
+        TSS   = sum(sum((A).^2,3),1);         % total SS (null model- intercept)
+        RSS   = sum(sum((A-Apred).^2,3),1);   % finger model (5 params)
+        RSScv = sum(sum((A-ApredCV).^2,3),1); % unrestricted SSR
+        dfN   = numCond - 1;                  % numerator DF is num params (5 fingers) - 1 (intercept)    
+        dfD   = numCond*numRun - numCond;
+        Fstat = ((TSS-RSS)./dfN) ./ (RSS./dfD);
+        % crossval f-stat
+        FstatCV = ((TSS-RSScv)./dfN) ./ (RSS./dfD);
+        Fcrit   = finv(0.95,dfN,dfD);
+        varargout = {Fstat,FstatCV,Fcrit};
+        %keyboard
+    
+    case 'ROI_getSingleFingerG'
+        glm = 3;
+        roi = 1:8;
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        sn = unique(I.sn);
+        vararginoptions(varargin,{'glm','roi','sn'});
+        % helper vector
+        if glm==3
+            numCond = 32;
+        elseif glm==2
+            numCond = 31;
+        end
+        take = zeros(numCond);
+        take(1:5,1:5) = ones(5);
+        take1 = logical(rsa_vectorizeIPM(take));
+        take = zeros(numCond);
+        take(1:31,1:31) = ones(31);
+        take2 = logical(rsa_vectorizeIPM(take));
+        % load data
+        T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        % cut data to output structure
+        D = []; 
+        D.glm        = ones(size(T.sn)).*glm;
+        D.sn         = T.sn;
+        D.roi        = T.roi;
+        D.Gcv        = T.G(:,take1);
+        D.Gemp       = T.G_emp(:,take1);
+        D.Gcv_multi  = T.G(:,take2);
+        D.Gemp_multi = T.G_emp(:,take2);
+        D.numVox     = T.numVox;
+        varargout = {D};       
+    
+    case 'ROI_getSingleFingerTuningSess'
+        % do sft analysis within sessions per subj, then avg, results
+        % across sessions
+        glm = 3;
+        roi = 1:4;
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        sn = unique(I.sn);
+        vararginoptions(varargin,{'glm','roi','sn'});
+        conds = 1:5;
+        numCond = numel(conds);
+        % load data
+        T = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        D = []; % output structure
+        v = ones(2,1); % helper vector
+        for ii = 1:size(T.sn,1)
+            % for each voxel in subj-roi, get avg. betas for single fingers
+            b           = [];
+            b.beta      = T.raw_beta{ii};
+            b.tt        = T.tt{ii};
+            b.run       = T.run{ii};
+            % loop through and do separately per session
+            for ss = 1:2
+                bs  = getrow(b,ismember(b.tt,conds) & ismember(b.run,run{ss}{T.sn(ii)}));
+                bs  = tapply(bs,{'tt'},{'beta','mean'});
+                Gtt = cov(bs.beta');
+                % rescale betaNoMax by setting the lowest value to 0,
+                % calculating distance from maxB to each value.
+                sftBeta         = pp1_imana('estSingleFingerTuning',bs.beta);
+                sftBeta         = mean(sftBeta);
+                [sftEV,sftDist] = pp1_imana('SFT:calcExpectedValue',Gtt,size(bs.beta,2)); % expected value of the null
+                % do prob test for each subject on their expected sft distribution
+                p = sum(sftBeta<=sftDist)/length(sftDist);
+                if isempty(p)
+                    p = realmin;
+                end
+                fprintf('s%02d roi%02d : p=%1.5f\n',T.sn(ii),T.roi(ii),p);
+                % add to output structure
+                d.passive   = v;
+                d.sn        = v.*T.sn(ii);
+                d.sess      = v.*ss;
+                d.roi       = v.*T.roi(ii);
+                d.glm       = v.*glm;
+                d.sft       = [sftBeta;sftEV];
+                d.sftProb   = v.*p;
+                d.sftSD     = v.*std(sftDist);
+                d.isEV      = [0;1];
+                D = addstruct(D,d);
+            end
+        end
+        save(fullfile(regDir,sprintf('sft_glm%d_sess',glm)),'-struct','D');
+        varargout = {D};    
+    case 'ROI_getSingleFingerTuning'
+        glm = 3;
+        roi = 1:4;
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        sn = unique(I.sn);
+        vararginoptions(varargin,{'glm','roi','sn'});
+        conds = 1:5;
+        numCond = numel(conds);
+        % load data
+        T = load(fullfile(regDir,sprintf('glm%d_reg_betas.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        D = []; % output structure
+        v = ones(2,1); % helper vector
+        for ii = 1:size(T.sn,1)
+            % for each voxel in subj-roi, get avg. betas for single fingers
+            b           = [];
+            b.beta      = T.raw_beta{ii};
+            b.tt        = T.tt{ii};
+            b.run       = T.run{ii};
+            b           = getrow(b,ismember(b.tt,conds));
+            [fstat,fstatCV,fcrit] = pp1_imana('calcFstat',b.beta,b.run,b.tt);
+            b           = tapply(b,{'tt'},{'beta','mean'});
+            Gtt         = cov(b.beta');
+            % calc tuning
+            sftBeta         = pp1_imana('estSingleFingerTuning',b.beta);
+            sftSigF         = mean(sftBeta(fstat>fcrit));       % voxels significantly tuned to fingers
+            sftSigFcv       = mean(sftBeta(fstatCV>fcrit));     % voxels significantly (crossvalidated) tuned to fingers 
+            sftBeta         = mean(sftBeta);                    % all voxels
+            [sftEV,sftDist] = pp1_imana('SFT:calcExpectedValue',Gtt,size(b.beta,2)); % expected value of the null
+            % do prob test for each subject on their expected sft distribution
+            p = sum(sftBeta<=sftDist)/length(sftDist);
+            if isempty(p)
+                p = realmin;
+            end
+            fprintf('s%02d roi%02d : p=%1.5f\n',T.sn(ii),T.roi(ii),p);
+            % add to output structure
+            d.passive   = v;
+            d.sn        = v.*T.sn(ii);
+            d.roi       = v.*T.roi(ii);
+            d.glm       = v.*glm;
+            d.sft       = [sftBeta;sftEV];
+            d.sftF      = [sftSigF;sftEV];
+            d.sftFcv    = [sftSigFcv;sftEV];
+            d.sftProb   = v.*p;
+            d.sftSD     = v.*std(sftDist);
+            d.isEV      = [0;1];
+            D = addstruct(D,d);
+        end
+        save(fullfile(regDir,sprintf('sft_glm%d_fcrit',glm)),'-struct','D');
+        varargout = {D};
+    case 'estSingleFingerTuning'
+        % calculate single finger tuning using normalzied distance approach
+        X         = varargin{1}; % CxN matrix of data.
+        numC      = size(X,1);
+        maxX      = max(X,[],1);
+        avgDistsN = (sum(maxX-X)./(numC-1)) ./ (maxX-min(X,[],1));
+        varargout = {avgDistsN};
+    case 'SFT:calcExpectedValue'
+        % calculates expected value (avg. sft across voxels) for voxels generated under specfified G
         
+        % simulation params
+        numSim  = 100;
+        modelG  = varargin{1};
+        numVox  = varargin{2};
+        % generate data
+        D = pp1_imana('SFT:model_G',modelG,numVox,numSim); % noiseless patterns
+        % calc expected tuning on simulated datasets
+        sft    = zeros(1,numSim);
+        sftF   = sft;
+        sftFcv = sft;
+        runVec = ones(size(modelG,1),1);
+        condVec = [1:5]';
+        for s = 1:numSim
+            d         = getrow(D,D.sn==s);
+            tmp       = pp1_imana('estSingleFingerTuning',d.data);
+%             [fstat,fstatCV,fcrit] = pp1_imana('calcFstat',d.data,runVec,condVec);
+            sft(s)    = mean(tmp); % mean tuning across voxels for this simulated dataset
+%             sftF(s)   = mean(tmp(fstat>fcrit));
+%             sftFcv(s) = mean(tmp(fstatCV>fcrit));
+        end
+        sftAll = sft;
+%         sftF   = mean(sftF);
+%         sftFcv = mean(sftFcv);
+        sft    = mean(sft); % mean tuning across datasets for this subject's simulations
+        varargout = {sft,sftAll};
+    case 'SFT:model_G'
+        % true betas drawn from normal distribution
+        muS     = 0; % signal mean (zero)- arbitrary
+        G       = varargin{1};
+        numVox  = varargin{2};
+        numSim  = varargin{3};
+        numCond = size(G,1);
+        v = ones(numCond,1); % helper vector
+        D = []; % output structure
+        for s = 1:numSim
+            U = mvnrnd_exact(G,numVox);
+%             try
+%                 U = mvnrnd(ones(numCond,1).*muS,G,numVox)'; % generate true patterns
+%             catch % make G semi-positive definite
+%                 A  = pcm_diagonalize(G); 
+%                 Gd = A*A';
+%                 U  = mvnrnd(ones(numCond,1).*muS,Gd,numVox)'; % generate true patterns
+%             end
+            d.data = U;
+            d.sn   = v.*s;
+            D = addstruct(D,d);
+        end
+        varargout = {D};
+ 
+    case 'ROI_rdmStability'
+        glm = 3;
+        roi = 1:8;
+        I = pp1_imana('LIST_subjs');
+        I = getrow(I,I.fmri_sessions==2);
+        sn = unique(I.sn);
+        vararginoptions(varargin,{'glm','roi','sn'});
+        % load data
+        T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
+        % housekeeping
+        T = getrow(T,ismember(T.sn,sn));
+        D = []; % output structure
+        take = logical(tril(ones(numel(sn)),-1));
+        for r = roi
+            t = getrow(T,T.roi==r);
+            R = corr(t.ldc');
+            d = [];
+            d.numSN = numel(sn); 
+            d.roi   = r;
+            d.corrs = R(take)';
+            d.corr  = mean(R(take));
+            % calc confidence bounds
+            rz        = fisherz(d.corrs)'; 
+            d.is_mean = fisherinv(mean(rz));
+            d.is_LB   = fisherinv(d.is_mean - 1.96*stderr(rz));
+            d.is_UB   = fisherinv(d.is_mean + 1.96*stderr(rz));
+            D = addstruct(D,d);
+        end
+        varargout = {D};
         
     case '0' % ------------ HARVEST: condense/make new datastructures. ----
         % The STATS cases usually harvest some data from ROI stats structures.
@@ -3176,18 +3427,12 @@ switch(what)
         glm = 2;
         numDigits = 1:5;
         vararginoptions(varargin,{'glm','numDigits'});
-        
-%         if numel(numDigits)>1
-%             error('NOTE: numDigits is exclusive! Cannot provide range.')
-%         end
-        
+
         % condition numbers
         if glm==2
             numConds = 31;
         elseif glm==3
-            numConds = 32;
-        elseif glm==4
-            numConds = 32;            
+            numConds = 32;           
         end
         
         numD = stimulationChords;
@@ -3223,7 +3468,7 @@ switch(what)
         T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
         D = [];
         d = [];
-        for i = 1:size(T.sn,1);
+        for i = 1:size(T.sn,1)
             for dd = 1:4 % number of digits in chord
                 P = pp1_imana('GET_idxPerNumDigits','glm',glm,'numDigits',dd); % returns row vector of indicies
                 v = ones(size(P,1),1);
@@ -3318,7 +3563,177 @@ switch(what)
         % The STATS cases usually harvest some data from ROI stats structures.
         % These cases usually correspond to FIG cases of the same name.
         % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -    
-           
+    case 'STATS_activityLinearScaling'
+        sn  = 1:6;
+        glm = 3;
+        roi = 1:4;
+        vararginoptions(varargin,{'sn','roi','glm'});
+        % get psc data
+        T  = pp1_imana('ROI_getChordPSC','glm',glm);
+        T  = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        T  = getrow(T,T.numDigits<6);
+        T = tapply(T,{'sn','roi','numDigits'},{'psc','mean'});
+        % do linear fits
+        numSubj = length(sn);
+        S = [];
+        for r = roi
+           d = getrow(T,T.roi==r);
+           y = d.psc;
+           x = d.numDigits;
+           % do linear regression in matrix form
+           c = indicatorMatrix('identity',d.sn);
+           Y = c.*repmat(y,1,numSubj);
+           % do linear finger scaling fits
+           X = c.*repmat(x,1,numSubj); % block diagonalize predictors
+           X = [X c.*ones(size(c,1),numSubj)];   % add intercepts (one per subject)
+           B = inv(X'*X)*X'*Y;                   % do linear regression
+           % calculate fits
+           Yp  = X*B;   % predicted data
+           res = Y-Yp;  % residuals 
+           s = [];
+           s.rss = diag(res'*res);   % residual sums of squares
+           s.tss = diag(Y'*Y);   % total sums of squares
+           s.r2  = ones(numSubj,1) - (s.rss./s.tss); % r2 coefficient
+           s.b_finger = diag(B([1:numSubj],[1:numSubj])); % snag finger-scaling betas
+           s.b_int    = diag(B([numSubj+1:end],[1:numSubj])); % snag intercept betas
+           s.sn  = d.sn(1:numSubj,1);
+           s.roi = ones(numSubj,1).*r;
+           S = addstruct(S,s);
+        end
+        varargout = {S};
+    case 'STATS_activityLogScaling'
+        sn  = 1:6;
+        glm = 3;
+        roi = 1:4;
+        vararginoptions(varargin,{'sn','roi','glm'});
+        % get psc data
+        T  = pp1_imana('ROI_getChordPSC','glm',glm);
+        T  = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        T  = getrow(T,T.numDigits<6);
+        T = tapply(T,{'sn','roi','numDigits'},{'psc','mean'});
+        % do log-linear fits
+        numSubj = length(sn);
+        S = [];
+        for r = roi
+           d = getrow(T,T.roi==r);
+           y = d.psc;
+           x = log(d.numDigits);
+           % do linear regression in matrix form
+           c = indicatorMatrix('identity',d.sn);
+           Y = c.*repmat(y,1,numSubj);
+           % do linear finger scaling fits
+           X = c.*repmat(x,1,numSubj); % block diagonalize predictors
+           X = [X c.*ones(size(c,1),numSubj)];   % add intercepts (one per subject)
+           B = inv(X'*X)*X'*Y;                   % do linear regression
+           % calculate fits
+           Yp  = X*B;   % predicted data
+           res = Y-Yp;  % residuals 
+           s = [];
+           s.rss = diag(res'*res);   % residual sums of squares
+           s.tss = diag(Y'*Y);   % total sums of squares
+           s.r2  = ones(numSubj,1) - (s.rss./s.tss); % r2 coefficient
+           s.b_finger = diag(B([1:numSubj],[1:numSubj])); % snag finger-scaling betas
+           s.b_int    = diag(B([numSubj+1:end],[1:numSubj])); % snag intercept betas
+           s.sn  = d.sn(1:numSubj,1);
+           s.roi = ones(numSubj,1).*r;
+           S = addstruct(S,s);
+        end
+        varargout = {S};
+    case 'dev_STATS_activityLinearScaling'
+        sn  = 1:6;
+        glm = 3;
+        roi = 1:4;
+        vararginoptions(varargin,{'sn','roi','glm'});
+        % get psc data
+        T  = pp1_imana('ROI_getChordPSC','glm',glm);
+        T  = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        T  = getrow(T,T.numDigits<6);
+        T = tapply(T,{'sn','roi','numDigits'},{'psc','mean'});
+        % do linear fits
+        numSubj = length(sn);
+        S = [];
+        for r = roi
+           d = getrow(T,T.roi==r);
+           y = d.psc;
+           x = d.numDigits;
+           % do linear regression in matrix form
+           c = indicatorMatrix('identity',d.sn);
+           Y = c.*repmat(y,1,numSubj);
+           % first fit mean activity as predictor
+           meanPSC = kron(mean(Y),ones(1,5))';
+           X   = c.*repmat(meanPSC,1,numSubj);  % block diagonalize predictors
+           B   = inv(X'*X)*X'*Y;                % do linear regression
+           Yp  = X*B;                           % predicted data
+           res = Y-Yp;                          % residuals 
+           int_rss = diag(res'*res);
+           % now do linear finger scaling fits
+           X = c.*repmat(x,1,numSubj); % block diagonalize predictors
+           %X = [X c.*ones(size(c,1),numSubj)];   % add intercepts (one per subject)
+           B = inv(X'*X)*X'*Y;                   % do linear regression
+           % calculate fits
+           Yp  = X*B;   % predicted data
+           res = Y-Yp;  % residuals 
+           s = [];
+           s.rss = diag(res'*res);   % residual sums of squares
+           s.tss = diag(Y'*Y);   % total sums of squares
+           s.int_rss = int_rss;
+           s.r2  = ones(numSubj,1) - (s.rss./int_rss); % r2 coefficient
+           %s.r2  = ones(numSubj,1) - (s.rss./s.tss); % r2 coefficient
+           s.b_finger = diag(B([1:numSubj],[1:numSubj])); % snag finger-scaling betas
+           %s.b_int    = diag(B([numSubj+1:end],[1:numSubj])); % snag intercept betas
+           s.sn  = d.sn(1:numSubj,1);
+           s.roi = ones(numSubj,1).*r;
+           S = addstruct(S,s);
+        end
+        varargout = {S};
+    case 'dev_STATS_activityLogScaling'
+        sn  = 1:6;
+        glm = 3;
+        roi = 1:4;
+        vararginoptions(varargin,{'sn','roi','glm'});
+        % get psc data
+        T  = pp1_imana('ROI_getChordPSC','glm',glm);
+        T  = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        T  = getrow(T,T.numDigits<6);
+        T = tapply(T,{'sn','roi','numDigits'},{'psc','mean'});
+        % do log-linear fits
+        numSubj = length(sn);
+        S = [];
+        for r = roi
+           d = getrow(T,T.roi==r);
+           y = d.psc;
+           x = log(d.numDigits);
+           % do linear regression in matrix form
+           c = indicatorMatrix('identity',d.sn);
+           Y = c.*repmat(y,1,numSubj);
+           % first fit mean activity as predictor
+           meanPSC = kron(mean(Y),ones(1,5))';
+           X   = c.*repmat(meanPSC,1,numSubj);  % block diagonalize predictors
+           B   = inv(X'*X)*X'*Y;                % do linear regression
+           Yp  = X*B;                           % predicted data
+           res = Y-Yp;                          % residuals 
+           int_rss = diag(res'*res);
+           % now do linear finger scaling fits
+           X = c.*repmat(x,1,numSubj); % block diagonalize predictors
+           %X = [X c.*ones(size(c,1),numSubj)];   % add intercepts (one per subject)
+           B = inv(X'*X)*X'*Y;                   % do linear regression
+           % calculate fits
+           Yp  = X*B;   % predicted data
+           res = Y-Yp;  % residuals 
+           s = [];
+           s.rss = diag(res'*res);   % residual sums of squares
+           s.tss = diag(Y'*Y);   % total sums of squares
+           s.int_rss = int_rss;
+           s.r2  = ones(numSubj,1) - (s.rss./int_rss); % r2 coefficient
+           %s.r2  = ones(numSubj,1) - (s.rss./s.tss); % r2 coefficient
+           s.b_finger = diag(B([1:numSubj],[1:numSubj])); % snag finger-scaling betas
+           %s.b_int    = diag(B([numSubj+1:end],[1:numSubj])); % snag intercept betas
+           s.sn  = d.sn(1:numSubj,1);
+           s.roi = ones(numSubj,1).*r;
+           S = addstruct(S,s);
+        end
+        varargout = {S};
+        
     case '0' % ------------ FIG: figures. ---------------------------------
         % The FIG cases usually harvest some data from ROI stats structures.
         % Sometimes they also do stats (since the data is harvested
@@ -3354,9 +3769,9 @@ switch(what)
         
         varargout = {D};
     case 'FIG_RDMline_LDC'
-        sn           = 1;
-        glm          = 4;
-        roi          = 5;
+        sn           = 1:6;
+        glm          = 3;
+        roi          = 1:4;
         numDigits    = 1;
         fig          = [];
         split        = 'roi';
@@ -3378,111 +3793,44 @@ switch(what)
         drawline(0,'dir','horz');
         
         varargout = {D};
-    
-    case 'old_FIG_pattReliabilitySingleFinger'
-        % plot split-half reliabilities for patterns evoked by single finger
-        % chords.
-        sn  = 1;
-        glm = 4;
-        roi = 5;
-        fig = [];
-        betaType = 'raw';
-        vararginoptions(varargin,{'sn','glm','roi','fig','betaType'});
-        
-        % get split-half pattern reliabilities
-        D = pp1_imana('ROI_splithalfPattReliability','sn',sn,'glm',glm,'roi',roi,'betaType',betaType,'conds',1:5);
-        % plot
-        if isempty(fig); figure('Color',[1 1 1]); else; fig; end
-        style.use('5shades');
-        plt.box(D.type,D.corr,'split',D.roi,'plotall',2);
-        %plt.set('xticklabel',{'within conds','across conds'});
-        plt.labels('','pearson''s r');
-        drawline(0,'dir','horz');
-        
-        varargout = {D};
-    case 'old_FIG_pattReliabilityAllChords'
-        % plot split-half reliabilities for patterns evoked by single finger
-        % chords.
-        sn  = 1;
-        glm = 4;
-        roi = 5;
-        fig = [];
-        betaType = 'raw';
-        vararginoptions(varargin,{'sn','glm','roi','fig','betaType'});
-        
-        % get split-half pattern reliabilities
-        D = pp1_imana('ROI_splithalfPattReliability','sn',sn,'glm',glm,'roi',roi,'betaType','raw','conds',1:31);
-        % plot
-        if isempty(fig); figure('Color',[1 1 1]); else; fig; end
-        style.use('5shades');
-        plt.box(D.type,D.corr,'split',D.roi,'plotall',2);
-        %plt.set('xticklabel',{'within conds','across conds'});
-        plt.labels('','pearson''s r');
-        drawline(0,'dir','horz');
-        
-        varargout = {D};
-    
+
     case 'PLOT_pattReliability'
         % plots pattern reliability w/in session and across session for
-        % sispecified conditions (default = all)
-        sn    = 2;
-        glm   = 2;
+        % specified conditions (default = all)
+        sn    = 1:5;
+        glm   = 3;
         roi   = 5;
-        conds = 1:31; 
         vararginoptions(varargin,{'sn','roi','glm','conds'});
         
-        % sess 1 odd-even reliability
-        R1 = pp1_imana('ROI_patternReliability','sn',sn,'glm',glm,'roi',roi,'conds',conds,'split','sess1');
-        R1 = tapply(R1,{'roi','type'},{'corr','mean'});
-        R1.split = [1;1];
-        % sess 2 odd-even reliability
-        R2 = pp1_imana('ROI_patternReliability','sn',sn,'glm',glm,'roi',roi,'conds',conds,'split','sess2');
-        R2 = tapply(R2,{'roi','type'},{'corr','mean'});
-        R2.split = [2;2];
-        % across-session reliability
-        R3 = pp1_imana('ROI_patternReliability','sn',sn,'glm',glm,'roi',roi,'conds',conds,'split','sess');
-        R3 = tapply(R3,{'roi','type'},{'corr','mean'});
-        R3.split = [3;3];
-        % plot
-        R = addstruct(R1,R2);
-        R = addstruct(R,R3);
-        plt.bar([R.split,R.type],R.corr,'style',style.custom({'black','red'}));
-        plt.labels('split','pearson''s r');
+        % R = pp1_imana('ROI_compareReliability','sn',sn,'glm',glm,'roi',roi);
+        R = load(fullfile(regDir,sprintf('patternReliability_roi%d_glm%d.mat',roi,glm)));
+        R = getrow(R,ismember(R.sn,sn));
+        plt.box(R.type,R.corr,'split',R.type);
+        plt.labels('','Pearson''s r','raw pattern reliability');
+        plt.set('xticklabel',{'within session','between session'},'xticklabelrotation',45);
+        legend off
+        ylims = ylim;
+        ylim([0 ylims(2)]);
         
-    case 'FIG_PSCperNumDigits'
+        varargout = {R};
+    case 'PLOT_PSCperNumDigits'
         % plot distance between chords (split by number of fingers
         % stimulated in chord) across M1 and S1 subregions.
-        sn    = 1;
-        glm   = 2;
+        sn  = 1:6;
+        glm = 3;
         roi = [1:4]; % [3a, 3b, 1, 2]
-        fig = [];
-        vararginoptions(varargin,{'sn','roi','glm','fig'});
+        vararginoptions(varargin,{'sn','roi','glm'});
         
-        % load data
-        T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
-        
-        D = [];
-        d = [];
-        v = ones(size(T.psc,2),1);
-        for i = 1:size(T.sn,1)
-            d.psc       = T.psc(i,:)';
-            d.chord     = T.psc_chord(i,:)';
-            d.numDigits = T.psc_numD(i,:)';
-            d.roi       = v.*T.roi(i);
-            d.sn        = v.*T.sn(i);
-            D = addstruct(D,d);
-            d = [];
-        end
-        %D  = getrow(D,D.numDigits<6);
+        D  = pp1_imana('ROI_getChordPSC','glm',glm);
+        D  = getrow(D,ismember(D.sn,sn) & ismember(D.roi,roi));
+        D  = getrow(D,D.numDigits<6);
         Dr = tapply(D,{'sn','roi','numDigits'},{'psc','mean'});
-        Dr = getrow(Dr,ismember(Dr.roi,roi) & ismember(Dr.sn,sn));
         % plot
-        if isempty(fig); figure('Color',[1 1 1]); else fig; end
         style.use('numDigits');
         plt.box([Dr.roi Dr.numDigits],Dr.psc,'split',Dr.numDigits);
         xtick = {};
         for r = roi
-            xtick = {xtick{:} '','',reg_title{r},'',''};
+            xtick = {xtick{:} '','',regname{r},'',''};
         end
         plt.set('xticklabel',xtick,'xticklabelrotation',45);
         plt.legend('east',{'1 digit','2 digits','3 digits','4 digits','5 digits'});
@@ -3490,13 +3838,90 @@ switch(what)
         drawline(0,'dir','horz');
         
         varargout = {Dr,D};
+    case 'PLOT_singleFingerRatio'
+        sn  = 1:6;
+        glm = 3;
+        roi = [2:4];
+        vararginoptions(varargin,{'sn','roi','glm'});
+        % get ratios
+        D = pp1_imana('ROI_getSingleFingerRatio','glm',glm);
+        D = getrow(D,ismember(D.roi,roi) & ismember(D.sn,sn));
+        % plot
+        sty = style.custom(plt.helper.get_shades(length(sn),'gray','descend'));
+        plt.line(D.roi,D.ratio,'style',sty);
+        xlabels = {};
+        for i = 1:length(roi)
+            xlabels{end+1} = reg_title{roi(i)};
+        end
+        plt.set(gca,'xticklabel',xlabels,'xticklabelrotation',45);
+        plt.labels('','variance/covariance ratio','single-finger specificity');
+        drawline(0,'dir','horz');
+        varargout = {D};
+    case 'PLOT_activityScaling'    
+        sn  = 1:6;
+        roi = 1:4;
+        glm = 3;
+        fig = [];
+        vararginoptions(varargin,{'sn','roi','glm','fig'});
+        % get fits
+        S1 = pp1_imana('STATS_activityLinearScaling','sn',sn,'roi',roi,'glm',glm);
+        S1.type = ones(size(S1.sn));
+        S2 = pp1_imana('STATS_activityLogScaling','sn',sn,'roi',roi,'glm',glm);
+        S2.type = ones(size(S2.sn)).*2;
+        S = addstruct(S1,S2);
+        % plot
+        if isempty(fig)
+            figure('Color',[1 1 1]);
+        else
+            fig;
+        end
+        plt.bar(S.roi,S.r2,'split',S.type);
+        plt.labels('','r2 coefficient','psc scaling');
+        xtick = {};
+        for r = roi
+            xtick = {xtick{:} '',reg_title{r}};
+        end
+        plt.set('xticklabel',xtick,'xticklabelrotation',45);
+        varargout = {S};
+        
+    case 'PLOT_RDMsquare_avg'
+        sn  = 1:6;
+        glm = 3;
+        roi = 1;
+        chords = 1:5;
+        vararginoptions(varargin,{'sn','roi','glm','chords'});
+        % load data
+        T = load(fullfile(regDir,['glm' num2str(glm) '_reg_Toverall.mat']));
+        T = getrow(T,ismember(T.sn,sn) & T.roi==roi);
+        % get rdm
+        rdmVec = ssqrt(T.ldc);
+        rdm = [];
+        for i = 1:size(rdmVec,1)
+            tmp = rdmVec(i,:);
+            tmp = rsa_squareRDM(tmp);
+            tmp = tmp(chords,chords);
+            rdm(i,:) = rsa_vectorizeRDM(tmp);
+        end
+        % quickly calculate inter-subject rdm correlations
+        r = corr(rdm');
+        interSubjCorr = 1-squareform(1-r)';
+        % plot
+        rdm = rsa_squareRDM(mean(rdm));
+        patchimg(rdm);
+        title(reg_title{roi});
+        set(gca,'xtick',[0.5:length(chords)],'xticklabel',chords);
+        set(gca,'ytick',[0.5:length(chords)],'yticklabel',chords);
+        ylim([0 length(chords)]);
+        xlim([0 length(chords)]);
+        
+        varargout = {rdm,interSubjCorr};
         
     case 'FIG_LDCperNumDigits'
         % plot distance between chords (split by number of fingers
         % stimulated in chord) across M1 and S1 subregions.
-        sn    = 1;
-        glm   = 4;
-        roi = [1:4,6]; % [3a, 3b, 1, 2, M1]
+        sn  = 1:6;
+        glm = 3;
+        roi = 1:4; % [3a, 3b, 1, 2, M1]
         fig = [];
         vararginoptions(varargin,{'sn','roi','glm','fig'});
         
@@ -3504,13 +3929,11 @@ switch(what)
         D.ldc = ssqrt(D.ldc);
         D = tapply(D,{'sn','roi','numDigits'},{'ldc','mean'});
         % plot
-        %style.use('5shades')
-        sty = style.custom(plt.helper.get_shades(length(roi),'jet','decrease',10));
+        style.use('numDigits');
         if isempty(fig); figure('Color',[1 1 1]); else fig; end
-        plt.line(D.roi,D.ldc,'split',D.numDigits,'style',sty);
+        plt.line(D.roi,D.ldc,'split',D.numDigits);
         plt.labels('roi','ldc^2 between chords with same # digits')
         drawline(0,'dir','horz');
-        
         varargout = {D};
     case 'FIG_LDCacrossNumDigits'
         % plot distance between chords with differing number of digits.
@@ -3563,8 +3986,105 @@ switch(what)
         plt.labels('roi','ldc^2','chords with diff # digits  .');
         plt.match('y');
         %subplot(1,3,3); pp1_imana('FIG_LDCperNumDigits','sn',sn,'glm',glm,'roi',roi,'fig',gca);
+
+    case 'PLOT_sft'
+        % plot single-finger preference analysis results
+        roi = [1:4];
+        glm = 3;
+        vararginoptions(varargin,{'roi','glm'});
+        % load data
+        T = load(fullfile(regDir,sprintf('sft_glm%d_fcrit.mat',glm)));
+        %T = tapply(T,{'passive','sn','roi','glm','isEV'},{'sft','mean'},{'sftProb','mean'},{'sftSD','mean'}); % avg. across sessions (if appropriate)
+        T = getrow(T,ismember(T.roi,roi));
+        % get roi labels
+        labels1 = {};
+        labels2 = {};
+        for r=roi
+            labels1{end+1} = '';
+            labels1{end+1} = regname{r};
+            labels2{end+1} = regname{r};
+        end
+        % plot styles
+        sty1 = style.custom({'blue','darkgray'}); 
+        sty2 = style.custom({'black'});           
+        sty1.general.markersize = 4;
+        sty2.general.markersize = 4;
         
+        % plot sft and mean (of simulated subject samples) expected value
+        subplot(1,3,1);
+        plt.box(T.roi,T.sft,'split',T.isEV,'style',sty1);
+        ylabel('single-finger tuning index');
+        set(gca,'xticklabel',labels1,'xticklabelrotation',45);
+        title('PASSIVE');
+        % plot difference between calculated and simulated subject avg. sft
+        subplot(1,3,2);
+        plt.box(T.roi(T.isEV==0),T.sft(T.isEV==0)-T.sft(T.isEV==1),'style',sty2);
+        drawline(0,'dir','horz','linestyle',':');
+        set(gca,'xticklabel',labels2,'xticklabelrotation',45);
+        ylabel('calculated - expected sft');
+        title('PASSIVE (blue - gray bars)');
+        % plot p-value of each subject's sft according to their own null
+        % distribution (expected sft distribution)
+%         subplot(1,3,3);
+%         plt.dot(T.roi,T.sftProb,'style',sty2,'subset',T.isEV==0);
+%         drawline(0,'dir','horz','linestyle',':');
+%         set(gca,'xticklabel',labels2,'xticklabelrotation',45);
+%         ylabel('p(H0)');
+%         ylim([0 1]);
+%         drawline(0.05,'dir','horz','linestyle',':');
+%         title('subject-specific null prob');
+
+        varargout = {T};
+    case 'PLOT_nnClassification'
+        % plots nearest neighbour classification accuracies for regions
+        % (accuracies for all chords and single fingers in separate
+        % subplots)
+        glm = 3;
+        roi = [1:4];
+        I   = pp1_imana('LIST_subjs');
+        I   = getrow(I,I.fmri_sessions==2);
+        sn  = unique(I.sn)';
+        vararginoptions(varargin,{'glm','sn','roi'});
+        
+        T = load(fullfile(regDir,sprintf('glm%d_reg_Toverall.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        
+        % arrange into plotting structure
+        D = [];
+        v = ones(4,1);
+        for ii = 1:length(T.sn)
+            d.roi    = v.*T.roi(ii);
+            d.sn     = v.*T.sn(ii);
+            d.numVox = v.*T.numVox(ii);
+            d.acc    = [T.nnEstAcc(ii);T.nnChanceAcc(ii);T.nnEstAccSF(ii);T.nnChanceAccSF(ii)];
+            d.pval   = [T.nnPval(ii);nan;T.nnPvalSF(ii);nan];
+            d.isEV   = [0;1;0;1];
+            d.sf     = [0;0;1;1]; % all chords or single finger classification?
+            D = addstruct(D,d);
+        end
+        
+        sty = style.custom({'blue','black'});
+        % plot all condition accuracy
+        subplot(1,2,1);
+        plt.box(D.roi,D.acc.*100,'split',D.isEV,'style',sty,'subset',D.sf==0);
+        title('all conditions');
+        ylabel('classification accuracy (%)');
+        xlabel('region');
+        %drawline((1/31)*100,'dir','horz','linestyle',':');
+        % plot single finger accuracy
+        subplot(1,2,2);
+        plt.box(D.roi,D.acc.*100,'split',D.isEV,'style',sty,'subset',D.sf==1);
+        title('single fingers');
+        ylabel('classification accuracy (%)');
+        xlabel('region');
+        %drawline(20,'dir','horz','linestyle',':');
+
+        varargout = {D};
+
     case '0' % ------------ PCM: pcm analyses. ----------------------------
+    case 'usageG'
+        U = load('/Users/sarbuckle/DATA/passivePatterns1/fmri/PCM_models/usageG.mat');
+        varargout = {U.G,U.G_cent};
     case 'pcm_null'
         % Model Null: chords patterns are fully independent
         M.type       = 'component';
@@ -3591,59 +4111,86 @@ switch(what)
         chords = chords./(kron(sum(chords,2),ones(1,5)));
         M.type       = 'feature';
         M.numGparams = 1;
-        M.name       = 'eye no scale';
+        M.name       = 'no scale I fingers';
         M.Ac(:,:,1)  = chords;
         varargout = {M};
     case 'pcm_linearScale'
         % Model Linear: chord patterns are linear summations of single
-        % finger patterns
+        % fingers (independent)
         M.type       = 'feature';
         M.numGparams = 1;
-        M.name       = 'eye L scale';
+        M.name       = 'L scale I fingers';
         M.Ac(:,:,1)  = pp1_simulations('chords');
         varargout = {M};
-    case 'pcm_nonlinearScale'
-        % Model nonLinear: chord patterns are linear summations of single
-        % finger patterns scaled by number of fingers pressed.
-        % Estimates ONLY scaling params- no finger params
-        M.type       = 'nonlinear';
-        M.name       = 'eye nL scale';
-        M.modelpred  = @pp1_modelpred_scale;
-        M.numGparams = 4;
-        %M.theta0     = [];
+    case 'pcm_linearScale_FixedG'
+        % Model Linear: chord patterns are linear summations of single
+        % fingers (independent)
+        M.type       = 'component';
+        M.numGparams = 0;
+        M.theta0     = [];
+        M.name       = 'L scale single finger G';
+%         M.Ac(:,:,1)  = pp1_simulations('chords');
         varargout = {M};
-    case 'pcm_linearScaleNonlinearFingers'
+    case 'pcm_linearScale_nonlinearFingers'
         % Model nonLinear: chord patterns are linear summations of single
         % finger patterns scaled by number of fingers pressed.
         % Estimates both finger params. Scaling params are fixed according
         % to the number of fingers in the chord.
         M.type       = 'nonlinear';
-        M.name       = 'nL fingers L scale';
-        M.modelpred  = @pp1_modelpred_singleFingerLinear;
+        M.name       = 'L scale NL fingers';
+        M.modelpred  = @pp1_modelpred_linearScale_nonlinearFinger;
         M.numGparams = 14;
         %M.theta0     = [];
         varargout = {M};
-    case 'pcm_nonlinearScaleNonlinearFingers'
+    case 'pcm_nonlinearScale'
         % Model nonLinear: chord patterns are linear summations of single
-        % finger patterns scaled by number of fingers pressed.
-        % Estimates both finger params and scaling params.
+        % fingers (independent) scaled by number of fingers pressed.
+        % Estimates ONLY scaling params- no finger params
         M.type       = 'nonlinear';
-        M.name       = 'nL fingers nL scale';
-        M.modelpred  = @pp1_modelpred_singleFingerScale;
-        M.numGparams = 18;
+        M.name       = 'NL scale I fingers';
+        M.modelpred  = @pp1_modelpred_nonlinearScale_fixedFinger;
+        M.numGparams = 4;
+        M.Gc(:,:,1)  = eye(5);
         %M.theta0     = [];
         varargout = {M};
-    case 'pcm_nonlinearScaleLinearUsage'
+    case 'pcm_nonlinearScale_linearUsage'
         % Model Linear: chord patterns are linear summations of single
         % finger patterns scaled by number of fingers pressed.
         % Estimates both scaling params with usage finger model.
         M.type       = 'nonlinear';
-        M.name       = 'usage nL scale';
-        M.modelpred  = @pp1_modelpred_usageScale;
+        M.name       = 'NL scale Usage fingers';
+        M.modelpred  = @pp1_modelpred_nonlinearScale_fixedFinger;
+        M.numGparams = 4;
+        %M.theta0     = [];
+        M.Gc(:,:,1)  = pp1_imana('usageG');
+        varargout = {M};
+    case 'pcm_nonlinearScale_linearH1'
+        % nonlinear scaling with G as previous roi's single finger G
+        M.type       = 'nonlinear';
+        M.name       = 'NL scale H1 fingers';
+        M.modelpred  = @pp1_modelpred_nonlinearScale_linearFinger;
         M.numGparams = 4;
         %M.theta0     = [];
         varargout = {M};
-      
+    case 'pcm_nonlinearScale_linearH2'
+        % nonlinear scaling with G as next roi's single finger G
+        M.type       = 'nonlinear';
+        M.name       = 'NL scale H2 fingers';
+        M.modelpred  = @pp1_modelpred_nonlinearScale_linearFinger;
+        M.numGparams = 4;
+        %M.theta0     = [];
+        varargout = {M};
+    case 'pcm_nonlinearScale_nonlinearFingers'
+        % Model nonLinear: chord patterns are linear summations of single
+        % finger patterns scaled by number of fingers pressed.
+        % Estimates both finger params and scaling params.
+        M.type       = 'nonlinear';
+        M.name       = 'NL scale NL fingers';
+        M.modelpred  = @pp1_modelpred_nonlinearScale_nonlinearFinger;
+        M.numGparams = 18;
+        %M.theta0     = [];
+        varargout = {M};
+        
     case 'PCM_getData'
         % Get betas for roi from subjects in PCM-friendly format.
         % Betas do not have run means removed.
@@ -3678,39 +4225,84 @@ switch(what)
             G_hat(:,:,i) = pcm_estGCrossval(Y{i},partVec{i},condVec{i});
         end
         varargout = {Y,partVec,condVec,G_hat};
+    case 'PCM_defineModels'
+        % case to define models fitted with PCM
+        G_hat = varargin{1}; % 31x31 group avg. second moment matrix
+        
+        % define model params and starting values
+        Asf         = pcm_diagonalize(G_hat(1:5,1:5));
+        chords      = pp1_simulations('chords');
+        Fx0         = pcm_free_startingval(G_hat(1:5,1:5));
+        scaleParams = log([0.8 0.6 0.4 0.2])';
+        
+        % 1. null model
+        M{1} = pp1_imana('pcm_null');
+        % - - - - -
+        % 2. no overall activity scaling, but patterns are linear finger
+        % summations
+%         M{end+1} = pp1_imana('pcm_noScale'); % this is dumb model, but eh.
+        % - - - - -
+        % 3. linear scaling, identity single-finger G
+%         M{end+1} = pp1_imana('pcm_linearScale');
+        % - - - - -
+        % 4. linear scaling of avg. single-finger G
+        M{end+1}  = pp1_imana('pcm_linearScale_FixedG');
+        M{end}.Gc = chords*(Asf*Asf')*chords';
+        % - - - - -
+        % 5. linear scaling of flexible single-finger G
+%         M{end+1}      = pp1_imana('pcm_linearScale_nonlinearFingers');
+%         M{end}.theta0 = Fx0;
+        % - - - - -
+        % 6. non-linear scaling of identity single-finger G
+%         M{end+1}      = pp1_imana('pcm_nonlinearScale');
+%         M{end}.theta0 = scaleParams;
+        % - - - - -
+        % 8. non-linear scaling of avg. single-finger G
+        M{end+1}      = pp1_imana('pcm_nonlinearScale');
+        M{end}.theta0 = scaleParams;
+        M{end}.Gc     = G_hat(1:5,1:5);
+        M{end}.name   = 'NL scale single finger G';
+        % - - - - -
+        % 7. non-linear scaling of usage single-finger G
+        M{end+1}      = pp1_imana('pcm_nonlinearScale_linearUsage');
+        M{end}.theta0 = scaleParams;
+        % - - - - -
+        % 9. non-linear scaling of flexible single-finger G
+%         M{end+1}      = pp1_imana('pcm_nonlinearScale_nonlinearFingers');
+%         M{end}.theta0 = [Fx0;scaleParams];
+        % - - - - -
+        % X. non-linear scaling of single-finger G + additive background
+        % pattern
+        M{end+1}         = pp1_imana('pcm_nonlinearScale');
+        M{end}.modelpred = @pp1_modelpred_nonlinearScale_fixedFinger_backgroundPattern;
+        M{end}.theta0    = [scaleParams;flipud(scaleParams)];
+        M{end}.numGparams= 8;
+        M{end}.Gc        = G_hat(1:5,1:5);
+        M{end}.name      = 'NL scale sf G add patt';
+
+        % - - - - -
+        % 10 & 11. noiseceilings
+        M{end+1} = pp1_imana('pcm_freedirect'); 
+%         M{end+1} = pp1_imana('pcm_freechol'); 
+        
+        varargout = {M};
     case 'PCM_fitModels_oneROI'
         % fits pcm models to data from one region
         sn     = 3;
         glm    = 2;
-        roi    = 5;
+        roi    = 2;
         plotit = 0; % plot fits
         saveit = 0; % save fits
         runEffect = 'random';
         vararginoptions(varargin,{'sn','glm','roi','plotit','saveit'});
+        
         % get data
         [Y,partVec,condVec,G_hat] = pp1_imana('PCM_getData','sn',sn,'roi',roi,'glm',glm);
         G_hat = mean(G_hat,3);
         
-        % get pcm models
-        M{1} = pp1_imana('pcm_null');
-        M{end+1} = pp1_imana('pcm_noScale');                        % 2
-        M{end+1} = pp1_imana('pcm_linearScale');                    % 3
-        M{end+1} = pp1_imana('pcm_nonlinearScale');                 % 4
-        M{end+1} = pp1_imana('pcm_nonlinearScaleLinearUsage');      % 5
-        M{end+1} = pp1_imana('pcm_linearScaleNonlinearFingers');    % 6
-        M{end+1} = pp1_imana('pcm_nonlinearScaleNonlinearFingers'); % 7
-        M{end+1} = pp1_imana('pcm_freedirect'); 
-        %M{end+1} = pp1_imana('pcm_freechol'); 
-        % set starting values for nonlinear scaling model
-        scaleParams = log([1.1, 1.2, 1.3, 1.4])';
-        M{4}.theta0 = scaleParams;
-        M{5}.theta0 = scaleParams;
-        % set starting values for nonlinear finger scaling model (2nd moment for single fingers)
-        Fx0 = pcm_free_startingval(G_hat(1:5,1:5));
-        scaleParams = log([1.1, 1.2, 1.3, 1.4])';
-        M{6}.theta0 = Fx0;
-        M{7}.theta0 = [Fx0;scaleParams];
-        
+        % get models
+        M = pp1_imana('PCM_defineModels',G_hat);
+
         % fit models
         [T,theta_hat,G_pred] = pcm_fitModelGroup(Y,M,partVec,condVec,'runEffect',runEffect,'fitScale',1);
         [Tcv,theta_cv]       = pcm_fitModelGroupCrossval(Y,M,partVec,condVec,'runEffect',runEffect,'groupFit',theta_hat,'fitScale',1,'verbose',1);
@@ -3737,12 +4329,12 @@ switch(what)
         varargout = {Tcv,T,M,theta_cv,G_pred,Y,partVec};
     case 'PCM_fit'
         % Does pcm fitting for multiple rois
-        sn  = 1:5;
-        roi = [1:4,6,13:16,18];
-        glm = 2;
+        sn  = 1:6;
+        roi = [1:8];
+        glm = 3;
         vararginoptions(varargin,{'sn','roi','glm'});
         for r = roi
-            fprintf('roi: %d\n',r);
+            fprintf('\nroi: %d...',r);
             pp1_imana('PCM_fitModels_oneROI','sn',sn,'roi',r,'glm',glm,'plotit',0,'saveit',1);
         end
     case 'PCM_getFits'
@@ -3750,17 +4342,23 @@ switch(what)
         % structure.
         % Assumes null model is model 1 and noiseceiling is last model.
         glm = 3;
-        vararginoptions(varargin,{'glm'});
+        roi = [];
+        nNull = 1; % which model is null?
+        nCeil = 4; % which model is noise ceiling ?
+        vararginoptions(varargin,{'glm','roi','nNull','nCeil'});
         D   = []; % output structure
-        for r = 1:length(reg_title)
+        for r = roi
+            Tcv = [];
             % if exists, load pcm fits for region (otherwise, skip region)
+            fprintf('\nroi %d...',r);
             try
                 load(fullfile(pcmDir,sprintf('pcmFits_glm%d_roi%d',glm,r)));
             catch
+                fprintf('no file.');
                 continue
             end
             % scale likelihoods
-            Tcv.likelihood_norm = bsxfun(@minus,Tcv.likelihood,Tcv.likelihood(:,1));
+            Tcv.likelihood_norm = bsxfun(@minus,Tcv.likelihood,Tcv.likelihood(:,nNull));
             % arrange into plotting structure
             numSubjs   = size(Tcv.SN,1);
             numModels  = numel(M);
@@ -3787,21 +4385,30 @@ switch(what)
                 d.modelName  = nameModels;
                 d.likeNormCV = Tcv.likelihood_norm(j,:)';
                 d.likeCV     = Tcv.likelihood(j,:)';
-                d.likeNorm   = [nan(numModels-1,1); T.likelihood(j,end) - Tcv.likelihood(j,1)]; % upper noise ceiling
+                d.likeNorm   = v.*nan;
+                d.likeNorm(nCeil) = T.likelihood(j,nCeil) - Tcv.likelihood(j,nNull); % upper noise ceiling
+                d.logLikeDiff= Tcv.likelihood(j,:)'- Tcv.likelihood(j,nCeil);
                 d.thetaCV    = Q.thetaCV(Q.sn==j);
                 D = addstruct(D,d);
             end
+            fprintf('done.');
         end
+        fprintf('\n');
         varargout = {D};
-    case 'PCM_plotFitsBox'  
-        % loads fit results per roi and plots them.
+    case 'PCM_plotPseudoR2'
+        % plots pseudo R2 value (0 = null, 1 = upper noise ceiling)
         glm = 3;
-        roi = [1:4,6];
-        sn  = 1:5;
+        roi = [1:4];
+        sn  = 1:6;
+        nNull = 1;
+        nCeil = 4;
+        modelsToPlot = [nNull,2,3,nCeil];
         vararginoptions(varargin,{'glm','roi','sn'});
         % get pcm fits
-        D = pp1_imana('PCM_getFits','glm',glm);
-        D = getrow(D,ismember(D.roi,roi) & ismember(D.sn,sn));
+        D = pp1_imana('PCM_getFits','glm',glm,'roi',roi,'nNull',nNull,'nCeil',nCeil);
+        D = getrow(D,ismember(D.roi,roi) & ismember(D.sn,sn) & ismember(D.model,modelsToPlot));
+        % calc pseudo R2
+        D.pseudoR2 = D.likeNormCV./kron(D.likeNorm(D.model==nCeil),ones(numel(unique(D.model)),1));
         % plot pcm fits
         numModels  = length(unique(D.model));
         nameModels = D.modelName(1:numModels);
@@ -3811,23 +4418,63 @@ switch(what)
             r = roi(i);
             subplot(1,numPlots,i);
             sty = style.custom(plt.helper.get_shades(numModels-2,'gray','descend'));
-            plt.box(D.model,D.likeNormCV,'subset',D.model>1 & D.model<numModels & D.roi==r,'split',D.model,'style',sty);
+            plt.box(D.model,D.pseudoR2,'subset',D.model~=nNull & D.model~=nCeil & D.roi==r,'split',D.model,'style',sty);
+%             plt.box(D.model,D.likeNormCV,'subset',D.model~=nNull & D.model~=nCeil & D.roi==r,'split',D.model,'style',sty);
             plt.set('xticklabel',{nameModels{2:numModels-1}},'xticklabelrotation',45);
-            plt.labels('','relative log likelihood',reg_title{r});
+            plt.labels('','pseudo model R2',regname{r});
+%             plt.labels('','normalized log-likelihood',regname{r});
             % plot noise ceilings
-            drawline(mean(D.likeNormCV(D.model==numModels & D.roi==r)),'dir','horz','linestyle','-.');
-            drawline(mean(D.likeNorm(D.model==numModels & D.roi==r)),'dir','horz','linestyle','-');
+            drawline(mean(D.pseudoR2(D.model==nCeil & D.roi==r)),'dir','horz','linestyle','-.'); % lower noise ceiling
+            drawline(1,'dir','horz','linestyle','-');
+%             drawline(mean(D.likeNormCV(D.model==nCeil & D.roi==r)),'dir','horz','linestyle','-.'); % lower noise ceiling
+%             drawline(mean(D.likeNorm(D.model==nCeil & D.roi==r)),'dir','horz','linestyle','-'); % lower noise ceiling
             legend off
             ylims = ylim;
             ylim([0 ylims(2)]);
         end
         plt.match('y');
         varargout = {D};
+    case 'PCM_plotFitsBox'  
+        % loads fit results per roi and plots them.
+        glm = 3;
+        roi = [1:4];
+        sn  = 1:6;
+        nNull = 1;
+        nCeil = 10;
+        modelsToPlot = [nNull,4,8,9,nCeil];
+        vararginoptions(varargin,{'glm','roi','sn'});
+        % get pcm fits
+        D = pp1_imana('PCM_getFits','glm',glm,'roi',roi,'nNull',nNull,'nCeil',nCeil);
+        D = getrow(D,ismember(D.roi,roi) & ismember(D.sn,sn) & ismember(D.model,modelsToPlot));
+        % plot pcm fits
+        numModels  = length(unique(D.model));
+        nameModels = D.modelName(1:numModels);
+        numPlots   = numel(roi);
+        figure('Color',[1 1 1]);
+        for i = 1:numPlots
+            r = roi(i);
+            subplot(1,numPlots,i);
+            sty = style.custom(plt.helper.get_shades(numModels-2,'gray','descend'));
+            plt.box(D.model,D.likeNormCV,'subset',D.model~=nNull & D.model~=nCeil & D.roi==r,'split',D.model,'style',sty);
+            plt.set('xticklabel',{nameModels{2:numModels-1}},'xticklabelrotation',45);
+            plt.labels('','relative log likelihood',regname{r});
+            % plot noise ceilings
+            drawline(mean(D.likeNormCV(D.model==nCeil & D.roi==r)),'dir','horz','linestyle','-.');
+            drawline(mean(D.likeNorm(D.model==nCeil & D.roi==r)),'dir','horz','linestyle','-');
+            legend off
+            ylims = ylim;
+            %ylim([0 ylims(2)]);
+        end
+        plt.match('y');
+        varargout = {D};
     case 'PCM_plotFitsBar'  
         % loads fit results per roi and plots them.
         glm = 3;
-        roi = [1:4,6];
-        sn  = 1:5;
+        roi = [1:4];
+        sn  = 1:6;
+        nNull = 1;
+        nCeil = 10;
+        modelsToPlot = [nNull,4,8,9,nCeil]; % first model is plotted as the null
         vararginoptions(varargin,{'glm','roi','sn'});
         numPlots = numel(roi);
         figure('Color',[1 1 1]);
@@ -3838,21 +4485,43 @@ switch(what)
             T   = getrow(T,ismember(T.SN,sn));
             Tcv = rmfield(Tcv,{'reg'});
             Tcv = getrow(Tcv,ismember(Tcv.SN,sn));
-            Tcv.likelihood_norm = bsxfun(@minus,Tcv.likelihood,Tcv.likelihood(:,1));
+            
+            % % for plotting specified models
+            Tp.SN           = T.SN;
+            Tp.noise        = T.noise(:,modelsToPlot);
+            Tp.scale        = T.scale(:,modelsToPlot);
+            Tp.run          = T.run(:,modelsToPlot);
+            Tp.likelihood   = T.likelihood(:,modelsToPlot);
+                
+            Tpcv.SN         = Tcv.SN;
+            Tpcv.noise      = Tcv.noise(:,modelsToPlot);
+            Tpcv.scale      = Tcv.scale(:,modelsToPlot);
+            Tpcv.run        = Tcv.run(:,modelsToPlot);
+            Tpcv.likelihood = Tcv.likelihood(:,modelsToPlot);
+            
+            Mp = {};
+            for m = modelsToPlot
+                Mp{end+1} = M{m};
+            end
+            % %
+            Tpcv.likelihood_norm = bsxfun(@minus,Tpcv.likelihood,Tpcv.likelihood(:,1));
             % plot fits (errorbars are stderr)
             subplot(1,numPlots,i);
-            pcm_plotModelLikelihood(Tcv,M,'upperceil',T.likelihood(:,end),'style','bar','Nceil',numel(M));
+            pcm_plotModelLikelihood(Tpcv,Mp,'upperceil',Tp.likelihood(:,end),'style','bar','Nceil',length(modelsToPlot));
             set(gca,'xticklabelrotation',45);
             ylabel('relative log-likelihood')
-            title(reg_title{r});
+            title(regname{r});
             box off;
         end
         plt.match('y');
+        varargout = {Tpcv};
     case 'PCM_plotGpred'  
         % loads fit results per roi and plots them.
-        glm = 2;
-        roi = 4;
-        sn  = 2:4;
+        glm = 3;
+        roi = 2;
+        nNull = 1;
+        nCeil = 10;
+        modelsToPlot = [nNull,4,8,9,nCeil];
         vararginoptions(varargin,{'glm','roi','sn'});
         if length(roi)>1
            error('can only call case with one roi'); 
@@ -3860,27 +4529,61 @@ switch(what)
         % load fits
         load(fullfile(pcmDir,sprintf('pcmFits_glm%d_roi%d',glm,roi)));
         figure('Color',[1 1 1]);
-        numPlots = numel(G_pred);
-        for i = 1:numPlots
+        numPlots = numel(modelsToPlot);
+        j = 1;
+        for i = modelsToPlot
             % plot fits
-            subplot(1,numPlots,i);
+            subplot(2,ceil(numPlots/2),j);
             imagesc(G_pred{i});
             title(sprintf('%s : %d params',M{i}.name,M{i}.numGparams));
-        end    
+            axis square
+            j = j+1;
+        end 
+        varargout = {G_pred};    
     case 'PCM_plotThetas'
         % loads fit results per roi and plots them.
         glm   = 3;
         roi   = [1:4];
         sn    = 1:5;
-        model = 6;
+        model = 8;
+        thetas= 1:4;
         vararginoptions(varargin,{'glm','roi','sn'});
         % load plotting-friendly data structure
-        D = load(fullfile(pcmDir,sprintf('pcmModelFits_glm%d',glm)));
-        D = getrow(D,D.model==model & ismember(D.roi,roi));
-        D.theta_cv = cell2mat(D.theta_cv); 
+        D = pp1_imana('PCM_getFits','glm',glm,'roi',roi);
+        D = getrow(D,D.model==model & ismember(D.roi,roi) & ismember(D.sn,sn));
+        D.thetaCV = cell2mat(D.thetaCV); 
         % plot
-        sty = style.custom(plt.helper.get_shades(length(roi),'jet','descend'));
-        plt.trace([1:14],D.theta_cv,'split',D.roi,'style',sty);
+        sty = style.custom(plt.helper.get_shades(length(roi),'parula','descend'));
+        plt.trace([thetas],exp(D.thetaCV(:,thetas)),'split',D.roi,'style',sty);
+        plt.labels('parameter no.','theta_cv value','single finger theta parameters');
+    case 'PCM_singleFingerRatio'
+        % loads fit results per roi and plots them.
+        glm   = 3;
+        roi   = 2:4;
+        sn    = 1:5;
+        model = 7; % most flexible model
+        vararginoptions(varargin,{'glm','roi','sn','model'});
+        varIdx = logical(rsa_vectorizeIPM(eye(5)));
+        % load plotting-friendly data structure
+        D = pp1_imana('PCM_getFits','glm',glm);
+        D = getrow(D,D.model==model & ismember(D.roi,roi) & ismember(D.sn,sn));
+        D.thetaCV = cell2mat(D.thetaCV); 
+        D.thetaCV = [ones(size(D.sn)) D.thetaCV(:,1:14)]; % thumb variance is fixed to 1 in model fitting
+        % calculate variance-to-covariance ratios    
+        var   = mean(D.thetaCV(:,varIdx),2);
+        covar = mean(D.thetaCV(:,~varIdx),2);
+        D.ratio = var./covar;
+        % plot
+        %sty = style.custom({'black'});
+        sty = style.custom(plt.helper.get_shades(length(sn),'gray','descend'));
+        %plt.line(D.roi,D.ratio,'style',sty,'split',D.sn);
+        plt.box(D.roi,D.ratio,'style',sty);
+        xlabels = {};
+        for i = 1:length(roi)
+            xlabels{end+1} = reg_title{roi(i)};
+        end
+        plt.set(gca,'xticklabel',xlabels,'xticklabelrotation',45);
+        plt.labels('','variance/covariance theta ratio','single-finger specificity');
 
     case 'PCM_addPatterns'
         sn  = 1:4;
@@ -3940,6 +4643,46 @@ switch(what)
         drawline(0,'dir','horz');
         
         varargout = {T,Ta};
+    
+    case 'PCM_plotActPassG'
+        % plots active and passive Gs, and their associated difference.
+        roi = 2;
+        vararginoptions(varargin,{'roi'});
+        glm_passive = 3;
+        % load data
+        load(fullfile(pcmDir,sprintf('pcmFits_glm%d_roi%d',glm_passive,roi)));
+        G_act = cpd2_imana('PCM_plotGpred','roi',roi); close gcf
+        G_diff = G_act{end} - G_pred{end};
+        chords = pp1_simulations('chords');
+        % plot
+        figure('Color',[1 1 1]);
+        subplot(1,4,1);
+        imagesc(chords);
+        title('configurations');
+        axis equal
+        xlim([0.5 5.5]);
+        subplot(1,4,2);
+        imagesc(G_pred{end});
+        title('avg. passive Gcv');
+        subplot(1,4,3);
+        imagesc(G_act{end});
+        title('avg. active Gcv');
+        subplot(1,4,4);
+        imagesc(G_diff);
+        title('difference (a-p)');
+        for ii = 2:4
+            subplot(1,4,ii);
+            axis square
+            drawline(5.5,'dir','vert');
+            drawline(5.5,'dir','horz');
+            drawline(15.5,'dir','vert');
+            drawline(15.5,'dir','horz');
+            drawline(25.5,'dir','vert');
+            drawline(25.5,'dir','horz');
+            drawline(30.5,'dir','vert');
+            drawline(30.5,'dir','horz');
+        end
+        varargout = {G_diff};
         
     case '0' % ------------ fingerpics: project patterns onto surface & take pictures.
         % You will absolutely need to edit these cases. 
@@ -3950,22 +4693,22 @@ switch(what)
         % So a range of 20 = 2mm distance on surface projection.
     case 'fingerpics'                                                       % Makes jpegs of finger activity patterns on cortical surface M1/S1
         sn  = 1;
-        glm = 2;
+        glm = 3;
         vararginoptions(varargin,{'sn','glm'});
         
         for s=sn;
             for g=glm;
-                pp1_imana('surf_mapFingers','sn',s,'glm',g)
+                %pp1_imana('surf_mapFingers','sn',s,'glm',g)
                 pp1_imana('surf_fingerpatterns','sn',s,'glm',g,'numDigits',[1,5]);
                 pp1_imana('surf_fingerpatterns','sn',s,'glm',g,'numDigits',[2]);
-                pp1_imana('surf_fingerpatterns','sn',s,'glm',g,'numDigits',[3]);
-                pp1_imana('surf_fingerpatterns','sn',s,'glm',g,'numDigits',[4]);
+                %pp1_imana('surf_fingerpatterns','sn',s,'glm',g,'numDigits',[3]);
+                %pp1_imana('surf_fingerpatterns','sn',s,'glm',g,'numDigits',[4]);
             end
         end
     case 'surf_mapFingers'                                                % Map locations of finger patterns- run after glm estimation
         % map volume images to metric file and save them in individual surface folder
         sn  = 1;
-        glm = 2;
+        glm = 3;
         vararginoptions(varargin,{'sn','glm'});
         hemisphere = 1;   % left hemi
 
@@ -3983,6 +4726,7 @@ switch(what)
                 C1 = caret_load(white);
                 C2 = caret_load(pial);
                 
+                images = {};
                 for f=1:length(fileList)
                     images{f} = fullfile(glmDir{glm},subj_name{s},fileList{f});
                 end
@@ -3994,7 +4738,7 @@ switch(what)
     case 'surf_fingerpatterns'             % Make finger pattern jpegs
         %close all;
         sn  = 1;
-        glm = 4;
+        glm = 3;
         numDigits = [1,5];
         vararginoptions(varargin,{'sn','glm','numDigits'});
         
@@ -4008,8 +4752,8 @@ switch(what)
                 %data  = 'lh.surface_shape';  
 %                 xlims=[-4 15]; % may need to adjust locations for pics
 %                 ylims=[-10 9];
-                xlims=[-5 18]; % may need to adjust locations for pics
-                ylims=[-8 20];
+                xlims=[-4 18]; % may need to adjust locations for pics
+                ylims=[-9 20];
             case 2 % right hemi
                 coord  = 'rh.FLAT.coord';
                 topo   = 'rh.CUT.topo';
@@ -4040,8 +4784,8 @@ switch(what)
         for i = digitCols'
             subplot(1,length(digitCols),j);
             [M,d]   = caret_plotflatmap('M',M,'col',i,'data',data,...
-                        'border',B.Border,'bordersize',10,'topo',topo,'coord',coord);
-            colormap('jet');
+                        'border',B.Border,'bordersize',10,'topo',topo,'coord',coord,'bordercolor',{'k.'});
+            colormap('parula');
             j = j+1;
         end;
         
@@ -4391,14 +5135,116 @@ switch(what)
         subplot(numel(sn),numel(roi),spindx-1); hold on;
         drawline(mean(all_depths(:,roi)),'dir','vert','color',[1 0 0]);
         hold off;     
-         
+    
+    case 'WRAPPER_searchlight'                                               
+        glm = 3;
+        vararginoptions(varargin,{'sn','glm'});
+        % You can call this case to run searchlight analyses.
+        % 'sn' can be an array of subjects.
+        for s = sn 
+            pp1_imana('SEARCH_define','sn',s,'glm',glm);
+            pp1_imana('SEARCH_ldcRun','sn',s,'glm',glm);
+            %pp1_imana('SEARCH_ldcContrasts','sn',s,'glm',glm);
+        end
+    case 'SEARCH_define'                                                    % STEP 4.1   :  Defines searchlights for 120 voxels in grey matter surface
+        glm = 3;
+        vararginoptions(varargin,{'sn','glm'});
+        
+        mask       = fullfile(glmDir{glm},subj_name{sn},'mask.nii');
+        Vmask       = rsa.readMask(mask);
+
+        LcaretDir = fullfile(caretDir,sprintf('xs0%d',sn),'LeftHem');
+        RcaretDir = fullfile(caretDir,sprintf('xs0%d',sn),'RightHem');
+        white     = {fullfile(LcaretDir,'lh.WHITE.coord'),fullfile(RcaretDir,'rh.WHITE.coord')};
+        pial      = {fullfile(LcaretDir,'lh.PIAL.coord'),fullfile(RcaretDir,'rh.PIAL.coord')};
+        topo      = {fullfile(LcaretDir,'lh.CLOSED.topo'),fullfile(RcaretDir,'rh.CLOSED.topo')};
+        S         = rsa_readSurf(white,pial,topo);
+
+        L = rsa.defineSearchlight_surface(S,Vmask,'sphere',[15 120]);
+        save(fullfile(anatomicalDir,subj_name{sn},sprintf('s%d_searchlight_120.mat',sn)),'-struct','L');
+    case 'SEARCH_ldcRun'                                                    % STEP 4.2   :  Runs LDC searchlight using defined searchlights (above)
+        % Requires java functionality unless running on SArbuckle's
+        % computer.
+        glm = 3;
+        vararginoptions(varargin,{'sn','glm'});
+        
+        block = 5e7;
+        cwd   = pwd;                                                        % copy current directory (to return to later)
+        % go to subject's glm directory 
+        spmDir = fullfile(glmDir{glm},subj_name{sn});
+        cd(spmDir);
+        % load their searchlight definitions and SPM file
+        L = load(fullfile(anatomicalDir,subj_name{sn},sprintf('s%d_searchlight_120.mat',sn)));
+        load SPM;
+        SPM  = spmj_move_rawdata(SPM,fullfile(imagingDir,subj_name{sn}));
+        % make index vectors
+        D = load('SPM_info.mat');
+        conditionVec  = D.tt;
+        partition     = D.run;
+        name = sprintf('s0%d_glm%d',sn,glm);
+        % run the searchlight
+        rsa.runSearchlightLDC(L,'conditionVec',conditionVec,'partition',partition,...
+                                'analysisName',name,'idealBlock',block,...
+                                'spmDir',spmDir);
+        cd(cwd);
+    case 'SEARCH_ldcContrasts'                                        
+        % Calls 'MISC_SEARCH_calculate_contrast'
+        sn  = 1;
+        glm = 3;
+        con = {'passive','singleFinger','multiFinger','thumbPress'};
+        vararginoptions(varargin,{'sn','glm','con'});
+        % Use 'con' option to define different contrasts.
+        %   'avg'    :  Average LDC nii for all 20 conds,
+        %                invariant of speed (avg of 10 pairwise distances)
+
+        % Load subject surface searchlight results (1 vol per paired conds)
+        LDC_file            = fullfile(glmDir{glm},subj_name{sn},sprintf('%s_glm%d_LDC.nii',subj_name{sn},glm)); % searchlight nifti
+        [subjDir,fname,ext] = fileparts(LDC_file);
+        cd(subjDir);
+        vol  = spm_vol([fname ext]);
+        vdat = spm_read_vols(vol); % is searchlight data
+        % For each of the predefined contrast types (see above)...
+        for c = 1:length(con)
+            switch con{c}
+                case 'passive' % just average across all paired distances
+                    gidx    = 1:size(vdat,4);
+                case '1digitChords' 
+                    gidx    = pp1_imana('GET_idxPerNumDigits','glm',glm,'numDigits',1); 
+                case '2digitChords' 
+                    gidx    = pp1_imana('GET_idxPerNumDigits','glm',glm,'numDigits',2);
+                case '3digitChords'
+                    gidx    = pp1_imana('GET_idxPerNumDigits','glm',glm,'numDigits',3);
+                case '4digitChords' 
+                    gidx    = pp1_imana('GET_idxPerNumDigits','glm',glm,'numDigits',4);
+                case 'numDigits'
+                    gidx    = pp1_imana('GET_idxAcrossNumDigits','glm',glm);
+            end
+            % avg. distances according to contrast selected
+            Y.LDC   = vdat(:,:,:,gidx);
+            Y.LDC   = ssqrt(Y.LDC);
+            Y.LDC   = nanmean(Y.LDC,4); 
+            % prep output file
+            Y.dim   = vol(1).dim;
+            Y.dt    = vol(1).dt;
+            Y.mat   = vol(1).mat;    
+            % save output
+            Y.fname   = sprintf('%s_glm%d_%sLDC.nii',subj_name{sn},glm,con{c});
+            Y.descrip = sprintf('exp: ''pp1'' \nglm: ''FAST'' \ncontrast: ''%s''',con{c});
+
+            spm_write_vol(Y,Y.LDC);
+            fprintf('Done %s\n',Y.fname);
+
+            clear Y
+        end
+    
+    
+
     otherwise
         fprintf('%s: no such case.\n',what)
 
 end
 
-
-% % Local Functions
+%% ------------------------- Local funcs ----------------------------------
 function dircheck(dir)
 % Checks existance of specified directory. Makes it if it does not exist.
 % SA 01/2016
@@ -4434,9 +5280,7 @@ AllCombos = [1 0 0 0 0; 0 1 0 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1;...          
              1 1 1 1 0; 1 1 1 0 1; 1 1 0 1 1; 1 0 1 1 1; 0 1 1 1 1;                % quadruples         5
              1 1 1 1 1];                                                           % all five           1
 end
-
-
-
+%% ------------------------- Old code -------------------------------------
 % old GLM cases (may be useful in future)
 % case 3
 %     % model error trials as separate regressor
@@ -4553,6 +5397,23 @@ end
 %     end
 % J.sess(r).cond(c).name = sprintf('chord_%d',R.chordNum(find(R.chordNum==c,1)));  % make condition name (for user readability)
 %                 
+
+
+% take = logical(tril(ones(5),-1));
+% c = rsa.util.pairMatrix(5);
+% D = [];
+% for i = 1:size(T.sn,1)
+%     g = T.G_wmean(i,:);
+%     g = rsa_squareIPM(g);
+%     g = g(1:5,1:5);
+%     d.dist = zeros(2,1);
+%     d.dist(1) = mean(diag(g)) - mean(g(take));
+%     d.dist(2) = mean(sum((c*g).*c,2));
+%     d.type    = [1;2];
+%     d.sn   = ones(2,1).*T.sn(i);
+%     d.roi  = ones(2,1).*T.roi(i);
+%     D = addstruct(D,d);
+% end
 
 cd(cwd); % return user to their directory when function was called
 end

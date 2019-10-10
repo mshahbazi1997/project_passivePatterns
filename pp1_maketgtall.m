@@ -1,13 +1,13 @@
 function varargout=pp1_maketgtall(varargin)
 % maketgtall specific params
 numRuns     = 15;        % number of target files to be made
-sn          = {'s03'};  % subject number
+sn          = {'s07'};  % subject number
 outDir      = cd;       % output directory for target files
 % target file params
 numStim     = 2;        % number of stimulations per trial
 numReps     = 2;        % repetitions per chord
 numFalse    = 3;        % number of false response trials per block
-chordNum    = [1:31];   % 1:5 are flexion, 6:10 are extension
+chordNum    = [1:31];   % chord condition numbers
 forceN      = 3;        % force applied to stimulated finger
 cueTime     = 500;      % ms
 stimTime    = 4000;     % time for finger stimulation (in ms)

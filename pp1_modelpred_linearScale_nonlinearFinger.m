@@ -1,4 +1,4 @@
-function [G,dGdtheta] = pp1_modelpred_singleFingerLinear(theta)
+function [G,dGdtheta] = pp1_modelpred_linearScale_nonlinearFinger(theta,Model)
 % Predicts G-matrix from the 14 parameters of the simple
 % scaling model and returns the derivative in respect to the parameters
 

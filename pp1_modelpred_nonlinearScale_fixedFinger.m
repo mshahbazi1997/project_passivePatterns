@@ -1,4 +1,4 @@
-function [G,dGdtheta] = pp1_modelpred_scale(theta,Model)
+function [G,dGdtheta] = pp1_modelpred_nonlinearScale_fixedFinger(theta,Model)
 % Predicts G-matrix from the 4 parameters of the simple
 % scaling model and returns the derivative in respect to the parameters
 % Finger params are hardcoded based on perscription (so change accordingly)
@@ -6,7 +6,7 @@ function [G,dGdtheta] = pp1_modelpred_scale(theta,Model)
 scaleParams = exp(theta(1:4));
 % single finger features
 G = Model.Gc(:,:,1);
-G = (G+G')/2;        % Symmetrize
+G = (G+G')/2;        % Symmetrize (make pos. definite)
 [V,lam_G] = eig(full(G));
 dS    = diag(lam_G);
 idx   = dS>eps;
