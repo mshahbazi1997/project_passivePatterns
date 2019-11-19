@@ -30,5 +30,11 @@ switch(styID)
         opt.hist.facealpha      = 0.4;
         opt.general.markersize  = 6;
         opt.general.linewidth   = 1.3;
+    case 'numDigitsPurple'
+        colours                 = {[0.30196 0.30196 0.30196] [0.43922 0 0.33333] [0.4549 0.15686 0.6549] [0.81569 0 0.96078] [0.89412 0.56471 1]};
+        opt.display.ax          = 'normal';
+        opt.hist.facealpha      = 0.4;
+        opt.general.markersize  = 6;
+        opt.general.linewidth   = 1.3;
 end;
 
