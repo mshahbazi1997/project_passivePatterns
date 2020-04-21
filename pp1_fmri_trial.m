@@ -9,24 +9,26 @@ state   = mov(:,1);        % trial state (4 = stimulation, 6 = response)
 time    = mov(:,4);        % time (ms)
 Force   = mov(:,5:9);      % 5 = thumb, 9 = pinky
 T = [];
-if length(unique(state))==1
-    fprintf('trial %02d run %02d is missing data\n',d.TN,d.BN);
-    return;
+movGood = (length(unique(state))~=1);
+if movGood
+    % 2. Indices for important experimental variables
+    % - state timing events  
+    Ia1 = find(state==4,1,'first'); % stimulation start
+    Ia2 = find(state==4,1,'last');  % stimulation end
+    idx = Ia1:Ia2;
+    % 3. Estimating peak forces
+    %digits  = [d.d1 d.d2 d.d3 d.d4 d.d5].*[1:5];
+    %digits  = digits(digits>0);
+    fthres  = 0.2;
+    Force   = smooth_kernel(Force,4);   % Smoothing with Gaussian kernel
+    %vF  = velocity_discr(Force); % first derivative of force (velocity)
+else
+    %fprintf('trial %02d run %02d is missing data\n',d.TN,d.BN);
 end
 
-% 2. Indices for important experimental variables
-% - state timing events  
-Ia1 = find(state==4,1,'first'); % stimulation start
-Ia2 = find(state==4,1,'last');  % stimulation end
-idx = Ia1:Ia2;
-% 3. Estimating peak forces
-%digits  = [d.d1 d.d2 d.d3 d.d4 d.d5].*[1:5];
-%digits  = digits(digits>0);
-fthres  = 0.2;
-Force   = smooth_kernel(Force,4);   % Smoothing with Gaussian kernel
-%vF  = velocity_discr(Force); % first derivative of force (velocity)
 
-for i = 1:5
+
+for i = 1:5 % for each finger:
     
     % prep output structure for trial
     t = [];
@@ -43,35 +45,42 @@ for i = 1:5
     t.stimulated     = eval(sprintf('[d.d%d]',i));
     t.time_stimOnset = nan;
     t.peakF_raw      = eval(sprintf('[d.peakF_d%d]',i));
-    t.peakF_filt     = nan;
+    t.peakF_filt     = t.peakF_raw;
     t.peakF_stims    = [nan nan];
     t.peakF_times    = [nan nan];
     
-    if t.stimulated %~isempty(idx) && t.stimulated
-        t.time_stimOnset = time(find(Force(idx,i)>fthres,1) + Ia1-1) - time(Ia1);
-        t.peakF_filt     = max(Force(idx,i),[],1);
-        % find times for peak forces of fingers (split into windows to find
-        % peaks b/c peak estimate is more stable than toying with
-        % minpeakdistance)
-        %[n,~,b] = histcounts(1:size(idx,2),d.numStim);
-        b = floor(length(idx)/d.numStim);
-        pf = [];
-        pt = [];
-        for j = 1:d.numStim
-            b1 = (1+b*(j-1));
-            b2 = b*j;
-            jidx = idx(b1:b2);
-            try
-                [pf(j),pt(j)] = findpeaks(Force(jidx,i),'minpeakheight',fthres,'npeaks',1,'SortStr','descend');
-            catch
-                keyboard
+    if movGood
+        t.peakF_filt = max(Force(idx,i),[],1);
+        
+        if t.stimulated
+            t.time_stimOnset = time(find(Force(idx,i)>fthres,1) + Ia1-1) - time(Ia1);
+            if isempty(t.time_stimOnset)
+                t.time_stimOnset = nan;
             end
-            pt(j) = jidx(pt(j));
+            t.peakF_filt     = max(Force(idx,i),[],1);
+            % find times for peak forces of fingers (split into windows to find
+            % peaks b/c peak estimate is more stable than toying with
+            % minpeakdistance)
+            %[n,~,b] = histcounts(1:size(idx,2),d.numStim);
+            b = floor(length(idx)/d.numStim);
+            pf = [];
+            pt = [];
+            for j = 1:d.numStim
+                b1 = (1+b*(j-1));
+                b2 = b*j;
+                jidx = idx(b1:b2);
+                try
+                    [pf(j),pt(j)] = findpeaks(Force(jidx,i),'minpeakheight',fthres,'npeaks',1,'SortStr','descend');
+                    t.peakF_stims(j) = pf(j);
+                    t.peakF_times(j) = time(pt(j))' - time(Ia1); % correct peak stim times to start of stimulation epoch
+                catch
+                    keyboard
+                end
+            end
         end
-        %[pf,pt] = findpeaks(Force(idx,i),'minpeakdistance',80,'minpeakheight',fthres,'npeaks',d.numStim,'SortStr','descend');
-        t.peakF_stims = pf;
-        t.peakF_times = time(pt)' - time(Ia1); % correct peak stim times to start of stimulation epoch
     end
+    
+    
     T = addstruct(T,t);
 end
 

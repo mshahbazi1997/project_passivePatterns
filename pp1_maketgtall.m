@@ -1,7 +1,7 @@
 function varargout=pp1_maketgtall(varargin)
 % maketgtall specific params
 numRuns     = 15;        % number of target files to be made
-sn          = {'s07'};  % subject number
+sn          = {'s13'};  % subject number
 outDir      = cd;       % output directory for target files
 % target file params
 numStim     = 2;        % number of stimulations per trial

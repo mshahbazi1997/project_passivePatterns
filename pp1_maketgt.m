@@ -58,15 +58,16 @@ falseCue(falseIdx) = 1;
 %- - - - - - -
 % set stimulation chords
 %- - - - - - -
-chords = [1 0 0 0 0; 0 1 0 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1;...             % singles            5
-          1 1 0 0 0; 1 0 1 0 0; 1 0 0 1 0; 1 0 0 0 1;...                        % doubles (thumb)    4
-          0 1 1 0 0; 0 1 0 1 0; 0 1 0 0 1;...                                   % doubles            3
-          0 0 1 1 0; 0 0 1 0 1;...                                              % doubles            2
-          0 0 0 1 1;...                                                         % doubles            1
-          1 1 1 0 0; 1 1 0 1 0; 1 1 0 0 1; 1 0 1 1 0; 1 0 1 0 1; 1 0 0 1 1;...  % triples (thumb)    6
-          0 1 1 1 0; 0 1 1 0 1; 0 1 0 1 1; 0 0 1 1 1;...                        % triples            4
-          1 1 1 1 0; 1 1 1 0 1; 1 1 0 1 1; 1 0 1 1 1; 0 1 1 1 1;                % quadruples         5
-          1 1 1 1 1]';                                                          % all five           1
+chords = pp1_imana('chords')'; % returns chords matching those depicted below:
+% chords = [1 0 0 0 0; 0 1 0 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1;...             % singles            5
+%           1 1 0 0 0; 1 0 1 0 0; 1 0 0 1 0; 1 0 0 0 1;...                        % doubles (thumb)    4
+%           0 1 1 0 0; 0 1 0 1 0; 0 1 0 0 1;...                                   % doubles            3
+%           0 0 1 1 0; 0 0 1 0 1;...                                              % doubles            2
+%           0 0 0 1 1;...                                                         % doubles            1
+%           1 1 1 0 0; 1 1 0 1 0; 1 1 0 0 1; 1 0 1 1 0; 1 0 1 0 1; 1 0 0 1 1;...  % triples (thumb)    6
+%           0 1 1 1 0; 0 1 1 0 1; 0 1 0 1 1; 0 0 1 1 1;...                        % triples            4
+%           1 1 1 1 0; 1 1 1 0 1; 1 1 0 1 1; 1 0 1 1 1; 0 1 1 1 1;                % quadruples         5
+%           1 1 1 1 1]';                                                          % all five           1
 
 
 %- - - - - - -
