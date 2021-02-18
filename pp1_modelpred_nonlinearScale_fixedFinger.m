@@ -5,8 +5,8 @@ function [G,dGdtheta] = pp1_modelpred_nonlinearScale_fixedFinger(theta,Model)
 % Harvest appropriate params
 scaleParams = exp(theta(1:4));
 % single finger features
-G = Model.Gc(:,:,1);
-G = (G+G')/2;        % Symmetrize (make pos. definite)
+A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
+G = A*A'; 
 [V,lam_G] = eig(full(G));
 dS    = diag(lam_G);
 idx   = dS>eps;

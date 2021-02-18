@@ -1,4 +1,5 @@
-function varargout = pp1_simulations(what,varargin)
+function varargout = pp1_selectivity(what,varargin)
+% case to test different models of single finger selectivity
 signal  = 0.3; % signal variance for pattern generation
 verbose = 1; % display output for crossvalidated pcm fitting
 recipeFile = '/Users/sarbuckle/MATLAB/pcm_toolbox/recipe_finger/data_recipe_finger7T.mat';
@@ -1614,7 +1615,7 @@ switch what
         set(gca,'xticklabel',string(evar),'xticklabelrotation',45);
                 
         varargout = {D};
-    case 'testFstatGauss'
+    case 'testFthres'
         % tests that restricting sft analysis to voxels with significant
         % responses does not introduce any bias
         numSim = [];
@@ -1622,53 +1623,65 @@ switch what
         evar = [];
         vararginoptions(varargin,{'svar','evar','numSim'});
         numCond = 5;
-        G      = eye(numCond);
+        %G       = eye(numCond);
+        % use avg. single finger G from 3b
+        G = [ 0.11931    -0.014803    -0.035168    -0.037241     -0.02326
+    -0.014803      0.10113    -0.024087    -0.038672    -0.035275
+    -0.035168    -0.024087      0.08886    -0.015966    -0.024505
+    -0.037241    -0.038672    -0.015966     0.090358   -0.0042599
+     -0.02326    -0.035275    -0.024505   -0.0042599      0.10681];
         %G = diag([1,2,3,4,5]);
         numVox = 100*numCond;
         numRun = 11;
         D      = [];
+        models = [1,2]; % mvnrnd and sparse
         
-        for ee=evar
-            for ii=1:numel(svar)
-                ss = svar(ii);
-                % simulate mvnrnd data (non-sparse)
-                d_norm = pp1_imana('SFT:model_Gnoise',G,numVox,numRun,numSim,ss,ee);
-                for jj = 1:numSim
-                    % indexing fields to output structure
-                    q.sparse = 0;
-                    q.sn   = jj;
-                    q.evar = ee;
-                    q.svar = ss;
-                    q.svarNum = ii;
-                    % get data for this simulation
-                    dn = getrow(d_norm,d_norm.sn==jj);
-                    % get f stat per voxel
-                    [F,Fcrit] = pp1_imana('SFT:calcFstat',dn.Y,dn.cond,dn.run);
-                    %[Fcv,FcritCV] = pp1_imana('calcFstatCV',dn.Y,dn.cond,dn.run);
-                    %[Z,Fj,p] = spmj_zFtest_imcalc(dn.Y,dn.cond,dn.run); % check correct F estiamtes
-                    % restrict further analyses to significant voxels
-                    dn.Y = dn.Y(:,F>=Fcrit); % using non-cv f stat as thresholder
-                    q.numVoxOrig = numVox;
-                    q.numVoxSig  = sum(F>=Fcrit);
-                    if q.numVoxSig==0
-                        q.evar_Est = nan;
-                        q.svar_Est = nan;
-                        q.sftEst   = nan;
-                        D = addstruct(D,q);
-                        continue
+        for mm=models % for each model
+            for ee=evar % for each noise lvl
+                for ii=1:numel(svar) % for each signal lvl
+                    ss = svar(ii);
+                    % simulate data
+                    switch mm
+                        case 1 % mvnrnd
+                            simData = pp1_imana('SFT:model_Gnoise',G,numVox,numRun,numSim,ss,ee);
+                        case 2
+                            simData = pp1_imana('SFT:model_Sparse',1,numVox,numRun,numSim,ss,ee);
                     end
-                    % remove run mean patterns of siginificant voxels only
-                    C0 = indicatorMatrix('identity',dn.run);
-                    dn.Y = dn.Y - C0*pinv(C0)*dn.Y;
-                    % calc snr for significant voxels
-                    [var_e,var_s] = pp1_imana('SFT:estimateVariances',dn.Y,dn.cond,dn.run);
-                    q.evar_Est    = var_e;
-                    q.svar_Est    = var_s;
-                    % estimate sft of significant voxels
-                    dnn           = tapply(dn,{'cond'},{'Y','mean'});
-                    q.sftEst      = mean(pp1_imana('SFT:estimateSFT',dnn.Y));
-                    
-                    D = addstruct(D,q);
+                    for jj = 1:numSim
+                        % indexing fields to output structure
+                        q.model= mm;
+                        q.sn   = jj;
+                        q.evar = ee;
+                        q.svar = ss;
+                        q.svarNum = ii;
+                        % get data for this simulation
+                        d = getrow(simData,simData.sn==jj);
+                        % get f stat per voxel
+                        [F,Fcrit,p] = pp1_imana('SFT:calcFstat',d.Y,d.cond,d.run);
+                        % 1. do analysis without restricting to sig.
+                        % voxels:
+                        C0 = indicatorMatrix('identity',d.run);
+                        d.Yall = d.Y - C0*pinv(C0)*d.Y; % remove run means
+                        [q.evar_est,q.svar_est] = pp1_imana('SFT:estimateVariances',d.Yall,d.cond,d.run);
+                        dall     = tapply(d,{'cond'},{'Yall','mean'}); % avg. across simulated runs
+                        q.sftEst = mean(pp1_imana('SFT:estimateSFT',dall.Yall));
+                        q.numVox = numVox;
+                        q.F      = F;
+                        q.Fcrit  = Fcrit;
+                        q.fthres = 0;
+                        D = addstruct(D,q);
+                        % 2. do analysis, including only sig. voxels:
+                        d.Yf = d.Y(:,F>=Fcrit); % using non-cv f stat as thresholder
+                        d.Yf = d.Yf - C0*pinv(C0)*d.Yf; % remove run means
+                        [q.evar_est,q.svar_est] = pp1_imana('SFT:estimateVariances',d.Yf,d.cond,d.run);
+                        df     = tapply(d,{'cond'},{'Yf','mean'}); % avg. across simulated runs
+                        q.sftEst = mean(pp1_imana('SFT:estimateSFT',df.Yf));
+                        q.numVox = size(df.Yf,2);
+                        q.F      = F;
+                        q.Fcrit  = Fcrit;
+                        q.fthres = 1;
+                        D = addstruct(D,q);
+                    end
                 end
             end
         end
@@ -1707,14 +1720,21 @@ switch what
                     q.svarNum = ii;
                     % get data for this simulation
                     ds = getrow(d_sparse,d_sparse.sn==jj);
+                    C0 = indicatorMatrix('identity',ds.run);
+                    % check overall se ratio before thresholding by F-stat:
+                    ds.Yall = ds.Y - C0*pinv(C0)*ds.Y; % remove run means
+                    [q.evar_Est_all,q.svar_Est_all] = pp1_imana('SFT:estimateVariances',ds.Yall,ds.cond,ds.run);
                     % get f stat per voxel
-                    [F,Fcrit] = pp1_imana('SFT:calcFstat',ds.Y,ds.cond,ds.run);
+                    [F,Fcrit,p] = pp1_imana('SFT:calcFstat',ds.Y,ds.cond,ds.run);
                     %[Fcv,FcritCV] = pp1_imana('calcFstatCV',dn.Y,dn.cond,dn.run);
                     %[Z,Fj,p] = spmj_zFtest_imcalc(dn.Y,dn.cond,dn.run); % check correct F estiamtes
                     % restrict further analyses to significant voxels
-                    ds.Y = ds.Y(:,F>=Fcrit); % using non-cv f stat as thresholder
+                    ds.Y = ds.Y(:,F>=Fcrit);% % using non-cv f stat as thresholder
                     q.numVoxOrig = numVox;
                     q.numVoxSig  = sum(F>=Fcrit);
+                    q.p = p;
+                    q.F = F;
+                    q.Fcrit = Fcrit;
                     if q.numVoxSig==0
                         q.evar_Est = nan;
                         q.svar_Est = nan;
@@ -1726,9 +1746,7 @@ switch what
                     C0 = indicatorMatrix('identity',ds.run);
                     ds.Y = ds.Y - C0*pinv(C0)*ds.Y;
                     % calc snr for significant voxels
-                    [var_e,var_s] = pp1_imana('SFT:estimateVariances',ds.Y,ds.cond,ds.run);
-                    q.evar_Est    = var_e;
-                    q.svar_Est    = var_s;
+                    [q.evar_Est,q.svar_Est] = pp1_imana('SFT:estimateVariances',ds.Y,ds.cond,ds.run);
                     % estimate sft of significant voxels
                     dnn           = tapply(ds,{'cond'},{'Y','mean'});
                     q.sftEst      = mean(pp1_imana('SFT:estimateSFT',dnn.Y));
@@ -1754,36 +1772,57 @@ switch what
         % significant activity. (subplot 1)
         % But, with increasing signal, only the sparsely tuned data should
         % show increasing sparsity values. (subplot 2)
-        numSim = 20;
-        svar = [0,0.001,0.01,0.1,1,10];
+        numSim = 10;
+        %svar = [0,0.001,0.01,0.1,0.5,1,10];
+        svar = [0:0.1:1];
         evar = 1;
-        D1 = pp1_simulations('testFstatGauss','svar',svar,'evar',evar,'numSim',numSim);  % simulate data that has gaussian tuning, & apply F-thresholding
-        D2 = pp1_simulations('testFstatSparse','svar',svar,'evar',evar,'numSim',numSim); % simulate data with sparse tuning (with exact same signal & error variances) , & apply F-thresholding
-        D = addstruct(D1,D2);
+%         D1 = pp1_simulations('testFstatGauss','svar',svar,'evar',evar,'numSim',numSim);  % simulate data that has gaussian tuning, & apply F-thresholding
+%         D2 = pp1_simulations('testFstatSparse','svar',svar,'evar',evar,'numSim',numSim); % simulate data with sparse tuning (with exact same signal & error variances) , & apply F-thresholding
+%         D = addstruct(D1,D2);
+        D = pp1_simulations('testFthres','svar',svar,'evar',evar,'numSim',numSim);
+        D.se_true = D.svar./D.evar; % specified SE ratio
+        D.se_hat  = D.svar_est./D.evar_est; % estimated SE ratio
         D = getrow(D,D.evar==1);
 
-        % plot
+        % plot styling
         labels = string(svar);
-        sty = style.custom({'darkgray','red'});
-        % plot % voxels retained in analyses
-        subplot(1,2,1);
-        plt.bar(D.svarLog,(D.numVoxSig./D.numVoxOrig).*100,'split',D.sparse,'style',sty);
-        xlabel('signal-error variance ratio (logscale)');
-        ylabel('% voxels');
-        title('% significant voxels (omnibus F-test)');
+        sty = style.custom({'darkgray','red','darkgray','red'});
+        sty.general.linestyle  = {'-','-',':',':'};
+        sty.general.markertype = {'o','o','^','^'};
+        
+        % plot se ratios:
+        subplot(1,3,1);
+        plt.line(D.se_true,D.se_hat,'split',[D.fthres D.model],'style',sty);
+        set(gca,'xtick',[0:0.1:1],'xticklabel',[0:0.1:1],'ytick',[0:0.1:1],'xticklabelrotation',45);
+        refline(1,0);
+        xlabel('specified SE var (ratio)');
+        ylabel('estimated SE var (ratio)');
+        title('simulated signal strength');
+        legend off
+        
+        % plot estimated sfts:
+        subplot(1,3,2)
+        plt.line(D.svarNum,D.sftEst,'split',[D.fthres D.model],'style',sty,'errorfcn','stderr');
+        ylabel('selectivity index');
+        xlabel('signal variance');
+        title('estimated selectivity')
+        set(gca,'xticklabel',labels,'xticklabelrotation',45);
+        legend off
+        
+        % plot % voxels retained after f-thresholding:
+        warning off
+        subplot(1,3,3);
+        plt.bar(D.svarNum,(D.numVox/500).*100,'split',D.model,'style',sty,'subset',D.fthres==1);
+        xlabel('signal variance');
+        ylabel('% voxels significant');
+        title(sprintf('%% significant voxels\n(omnibus F-test)'));
         legend off
         setXTicksGroups(gca,numel(svar),2,labels);
-        % plot estimated sfts
-        subplot(1,2,2)
-        plt.line(D.svarLog,D.sftEst,'split',D.sparse,'style',sty,'errorfcn','stderr');
-        ylabel('selectivity');
-        xlabel('signal / error variance (logscale)');
-        title('estimated selectivity')
-        set(gca,'xticklabel',labels);
-        legend off
+        set(gca,'xticklabelrotation',45);
+        warning on
+        
         varargout = {D};
-    
-
+        
 end
 end
 
