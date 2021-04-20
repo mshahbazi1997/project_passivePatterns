@@ -4,9 +4,11 @@ function varargout=pp1_encoding_dropDigit(what,varargin)
 % Encoding analyses done with dataset where we drop all data associated
 % with one of the five digits.
 digitToDrop = 5; 
+keepDigits = true(1,5);
+keepDigits(digitToDrop)=false;
 
 % Directories for data
-dataDir = '/Users/sarbuckle/Dropbox (Diedrichsenlab)/passivePatterns_paper/pp1_encodingAnalyses/data';
+dataDir = '/Users/sarbuckle/Dropbox (Diedrichsenlab)/passivePatterns_analysis/pp1_encodingAnalyses/data';
 %dataDir = '/home/saarbuckle/Dropbox (Diedrichsenlab)/passivePatterns_paper/pp1_encodingAnalyses/data';
 
 subj_name = {'pd01','pd02','s01','s02','s03','s04','s05','s06','s07','s08','s09'}; 
@@ -48,9 +50,6 @@ switch what
         
         
         % nice plot
-        
-%         clrs = {[0.0014616 0.00046613 0.013866],[0.21558 0.061523 0.4225],[0.51993 0.15069 0.50742],...
-%             [0.82718 0.26131 0.43149],[0.98877 0.55257 0.38931],[0.5 00.5 0]};
         ch = plt.helper.get_shades(5,'gray');
         sty = style.custom([ch {[0.3 0 0.7]}]); 
         sty.general.linestyle = {'-','-','-','-','-','-.'};
@@ -134,7 +133,7 @@ switch what
         glm = 4;
         vararginoptions(varargin,{'roi','sn'});
         numModels = 7;
-        chords = pp1_encoding_dropDigit('chords');
+        chords = pp1_encoding_dropDigit('chordsAll');
         numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
         % load subject data (load in once for all subjs to save time):
         [Y,pV,cV] = pp1_encoding_dropDigit('getData','sn',sn,'roi',roi,'glm',glm);
@@ -154,8 +153,8 @@ switch what
             end  
             % allocate space for predicted patterns, evaluation metrics:
             numVox = size(Y{s},2);
-            G_pred = zeros(15,15,numModels);
-            Y_avg = nan([numModels,4,numPart]); % avg. activity per # digits
+            G_pred = zeros(31,31,numModels);
+            Y_avg = nan([numModels,5,numPart]); % avg. activity per # digits
             modelTheta = {};
             SS1 = zeros(numPart,numModels);
             SS2 = SS1; SSC = SS1; SS1t = SS1; SS2t = SS1; SSCt = SS1; 
@@ -180,7 +179,7 @@ switch what
                             Ypred = pp1_encoding_dropDigit('predictModelPatterns',Utrain,'null',[]);
                             thetaReg = thetaReg0;
                             lambdaReg = lambda0;
-                            thetaEst = [nan nan nan nan];
+                            thetaEst = [nan nan nan nan nan];
                             
                         case 2 % linear summation model
                             modelName = 'linear';
@@ -191,7 +190,7 @@ switch what
                             [thetaEst,feval,ef,fitInfo] = fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
                             Ypred = pp1_encoding_dropDigit('predictModelPatterns',Uf,'summation',thetaEst);
                             thetaBaseline = thetaEst(1);
-                            thetaEst = [thetaEst nan nan nan];
+                            thetaEst = [thetaEst nan nan nan nan];
                         case 3 % 2nd order polynomial (2-finger interactions)
                             modelName = '2finger';
                             [Uf, thetaReg] = pp1_encoding_dropDigit('estU_tikhonov2F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
@@ -200,7 +199,7 @@ switch what
                             thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'2dInt'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
                             Ypred = pp1_encoding_dropDigit('predictModelPatterns',Uf,'2dInt',thetaEst);
-                            thetaEst = [thetaEst nan nan nan];
+                            thetaEst = [thetaEst nan nan nan nan];
                         case 4 % 3rd order polynomial (3-finger interactions)
                             modelName = '3finger';
                             [Uf, thetaReg] = pp1_encoding_dropDigit('estU_tikhonov3F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
@@ -209,7 +208,7 @@ switch what
                             thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'3dInt'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
                             Ypred = pp1_encoding_dropDigit('predictModelPatterns',Uf,'3dInt',thetaEst);
-                            thetaEst = [thetaEst nan nan nan];
+                            thetaEst = [thetaEst nan nan nan nan];
                         case 5 % 4th order polynomial (4-finger interactions, saturated model)
                             modelName = '4finger';
                             [Uf, thetaReg] = pp1_encoding_dropDigit('estU_tikhonov4F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
@@ -218,23 +217,23 @@ switch what
                             thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'4dInt'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
                             Ypred = pp1_encoding_dropDigit('predictModelPatterns',Uf,'4dInt',thetaEst);
-                            thetaEst = [thetaEst nan nan nan];
+                            thetaEst = [thetaEst nan nan nan nan];
                         
                         case 6 % flexible summation model
                             modelName = 'flexible';
                             [Uf,lambdaReg,thetaReg] = pp1_encoding_dropDigit('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
                             
-                            theta0 = [thetaBaseline log(1/2) log(1/3) log(1/4)];
+                            theta0 = [thetaBaseline log(1/2) log(1/3) log(1/4) log(1/5)];
                             thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
                             Ypred = pp1_encoding_dropDigit('predictModelPatterns',Uf,'summation_flexible',thetaEst);
-                            thetaEst = [thetaEst(1) exp(thetaEst(2:4))];
+                            thetaEst = [thetaEst(1) exp(thetaEst(2:5))];
                         case 7 % lower noise ceiling
                             modelName = 'noise ceiling';
                             Ypred = Utrain;
                             thetaReg = thetaReg0;
                             lambdaReg = lambda0;
-                            thetaEst = [nan nan nan nan];      
+                            thetaEst = [nan nan nan nan nan];      
                     end
                     modNames{mm,1} = modelName;
                     % scale model predictions to left-out test data:
@@ -299,7 +298,7 @@ switch what
                 % Ysf here are all 31 conditions from the training data
                 % Set each condition pattern to the be mean pattern for all
                 % chords with the same number of fingers.
-                chords = pp1_encoding_dropDigit('chords'); 
+                chords = pp1_encoding_dropDigit('chordsAll'); 
                 X = pcm_indicatorMatrix('identity',sum(chords,2)); % which patterns have the same # of fingers?
                 Ymf_hat = X*pinv(X)*Ysf;
             case 'summation'
@@ -315,9 +314,10 @@ switch what
                 % chords for 2:4 digits)
                 
                 
+                X0 = pp1_encoding_dropDigit('chordsAll');
+                numD = sum(X0,2);
                 X = pp1_encoding_dropDigit('chords');
-                numD = sum(X,2);
-                X = X.*[ones(1,4) exp(theta(numD(numD>1)))]'; % flexible scaling per # fingers stimulated (force positive values with exp)
+                X = X.*[ones(1,5) exp(theta(numD(numD>1)))]'; % flexible scaling per # fingers stimulated (force positive values with exp)
                 Ymf_hat = X*(Ysf-theta(1)) + theta(1); 
             case '2dInt' % linear summation and paired interactions
                 % model that includes 2-finger interaction components
@@ -340,13 +340,6 @@ switch what
                 X3 = pp1_encoding_dropDigit('chord_triplets');
                 X4 = pp1_encoding_dropDigit('chord_quads');
                 X  = [X1 X2 X3 X4];
-                Ymf_hat = X*(Ysf-theta(1)) + theta(1); 
-            case '5dInt'
-                X1 = pp1_encoding_dropDigit('chords');
-                X2 = pp1_encoding_dropDigit('chord_pairs');
-                X3 = pp1_encoding_dropDigit('chord_triplets');
-                X4 = pp1_encoding_dropDigit('chord_quads');
-                X  = [X1 X2 X3 X4 [zeros(30,1);1]];
                 Ymf_hat = X*(Ysf-theta(1)) + theta(1); 
         end
         varargout = {Ymf_hat};
@@ -430,8 +423,6 @@ switch what
         % create finger feature matrix
         c1 = pp1_encoding_dropDigit('chords'); % single finger features
         c2 = pp1_encoding_dropDigit('chord_pairs'); % finger pair features
-        c3 = pp1_encoding_dropDigit('chord_triplets'); % finger triplet features
-        c4 = pp1_encoding_dropDigit('chord_quads'); % etc...
         Z0 = [c1 c2];
         Z = kron(ones(numel(unique(pV)),1),Z0);      
                 
@@ -511,13 +502,12 @@ switch what
         varargout = {U,lambda,theta_hat{1}};    
         
     case '0' % helper cases:
-    case 'get_notDigitIdx'
+    case 'get_droppedIdx'
         % return column vector logical [31] that denotes which of the 31
-        % chords has the thumb in it.
+        % chords has the dropped digit in it.
         c = pp1_encoding_dropDigit('chordsAll');
-        idx = c(:,digitToDrop)~=1;
-        condNum=[1:31]';
-        varargout={idx,condNum(idx)};
+        idx = c(:,digitToDrop)==1;
+        varargout={idx};
     case 'chordsAll'
         % returns indicator matrix for chords used in exp.
         chords = [eye(5);...                                                       % singles            5
@@ -547,26 +537,41 @@ switch what
              1 1 1 1 0; 1 1 1 0 1; 1 1 0 1 1; 1 0 1 1 1; 0 1 1 1 1;                % quadruples         5
              1 1 1 1 1];                                                           % all five           1
                                                                                    % total-------------31
-        idx = pp1_encoding_dropDigit('get_notDigitIdx');
-        keepDigits = ones(1,5);
-        keepDigits(digitToDrop)=0;
-        chords = chords(idx,logical(keepDigits));
+        chords = chords(:,logical(keepDigits));
         varargout = {chords}; 
     case 'chord_pairs'
         % returns indicator matrix for pairs of fingers use in each config:
-        X=pp1_encoding_dropDigit('chords');
+%         X=pp1_encoding_dropDigit('chordsAll');
+%         numD = sum(X,2);
+%         dIdx=pp1_encoding_dropDigit('get_droppedIdx');
+%         X(X==0)=nan;
+%         keepDigits = true(1,5);
+%         keepDigits(digitToDrop)=false;
+%         pairs = X(numD==2 & ~dIdx,keepDigits); % 2 finger pairs
+%         X = X(~dIdx,keepDigits);
+%         Xp = zeros(size(X,1),sum(numD==2));
+%         for ii=1:size(pairs,1) % for each pair, find where in chords it is used
+%             pidx = sum(X==pairs(ii,:),2)==2;
+%             Xp(pidx,ii) = 1;
+%         end
+
+        X=pp1_encoding_dropDigit('chordsAll');
         numD = sum(X,2);
         X(X==0)=nan;
         pairs = X(numD==2,:); % 2 finger pairs
-        Xp = zeros(size(X,1),sum(numD==2));
+        Xp = zeros(31,10);
         for ii=1:size(pairs,1) % for each pair, find where in chords it is used
             pidx = sum(X==pairs(ii,:),2)==2;
             Xp(pidx,ii) = 1;
         end
+        % drop terms for pairs that include dropped digit
+        dIdx = pp1_encoding_dropDigit('get_droppedIdx');
+        Xp = Xp(:,~dIdx(numD==2));
+
         varargout = {Xp};
     case 'chord_triplets'
         % returns indicator matrix for sets of 3 fingers use in each config:
-        X=pp1_encoding_dropDigit('chords');
+        X=pp1_encoding_dropDigit('chordsAll');
         numD = sum(X,2);
         X(X==0)=nan;
         pairs = X(numD==3,:); % 3 finger triplets
@@ -575,10 +580,15 @@ switch what
             pidx = sum(X==pairs(ii,:),2)==3;
             Xp(pidx,ii) = 1;
         end
+        
+        % drop terms for triplets that include dropped digit
+        dIdx = pp1_encoding_dropDigit('get_droppedIdx');
+        Xp = Xp(:,~dIdx(numD==3));
+        
         varargout = {Xp};
     case 'chord_quads'
         % returns indicator matrix for set of 4 fingers use in each config:
-        X=pp1_encoding_dropDigit('chords');
+        X=pp1_encoding_dropDigit('chordsAll');
         numD = sum(X,2);
         X(X==0)=nan;
         pairs = X(numD==4,:); % 4 finger quads
@@ -587,6 +597,11 @@ switch what
             pidx = sum(X==pairs(ii,:),2)==4;
             Xp(pidx,ii) = 1;
         end
+        
+        % drop terms for quads that include dropped digit
+        dIdx = pp1_encoding_dropDigit('get_droppedIdx');
+        Xp = Xp(:,~dIdx(numD==4));
+        
         varargout = {Xp};
        
     case 'getData'
@@ -600,7 +615,6 @@ switch what
         if length(roi)>1
             error('only 1 roi supported per call to case');
         end
-        [~,condNum] = pp1_encoding_dropDigit('get_notDigitIdx');
         % load betas
         betaType = 'betaW'; % multivariately prewhitened (or betaUW, raw_beta)
         B = load(fullfile(dataDir,sprintf('glm%d_roi%d_betas.mat',glm,roi)));
@@ -617,7 +631,7 @@ switch what
             bb.run   = cell2mat(b.run);
             bb.chord = cell2mat(b.tt);
             eval(sprintf('bb.betas = cell2mat(b.%s);',betaType));
-            bb = getrow(bb,ismember(bb.chord,condNum)); % restrict to chords without specified digit
+            bb = getrow(bb,ismember(bb.chord,1:31)); % drop thumb movement regressor (cond 32)
             % put subj data into pcm variables
             Y{ii}         = bb.betas;
             partVec{ii}   = bb.run;
@@ -635,8 +649,7 @@ switch what
         D = load(fullfile(dataDir,sprintf('glm%d_regionG.mat',glm)));
         D = getrow(D,D.roi==roi);
         G = rsa_squareIPM(D.g);
-        idx = pp1_encoding_dropDigit('get_notDigitIdx');
-        G = G(idx,idx);
+        G = G(1:31,1:31);
         varargout={G};
     case 'evaluate'
         % Ypred and Ytest are assumed to be the same size [31xP]

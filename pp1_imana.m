@@ -413,6 +413,160 @@ switch(what)
         
         %__________________________________________________________________  
     case '0' % ------------ BEHA: behavioural force data cases. ----------- % These functions are from fdf2/3 so need editing for your paradigm
+    case 'BEHA_simpleAna'
+        % simple analysis of force data:
+        % - load .dat files
+        % - use .dat files to calculate stimulation force
+        % - use .dat files to calculate behavioural performance in each run
+        % - save performance structure per participant
+        sn = pp1_imana('getSubjs');
+        T=[]; % output structure across subjects
+        for s = sn
+            fprintf('%s\n',subj_name{s});
+            dataFileIn  = fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{s}));
+            
+            D    = dload(dataFileIn);
+            runs = unique(D.BN);
+            for r = runs'
+                d = getrow(D,D.BN==r); % trials from this run
+                % indexing fields:
+                numT = numel(d.TN);
+                t.sn          = ones(numT,1).*s;
+                t.subjName    = repmat({subj_name{s}},numT,1);
+                t.run         = d.BN;
+                t.trialNum    = d.TN;
+                t.chordNum    = d.chordNum;
+                t.chordStim   = [d.d1 d.d2 d.d3 d.d4 d.d5];
+                t.chordScreen = [d.c1 d.c2 d.c3 d.c4 d.c5];
+                t.numDigits   = sum(t.chordStim,2);
+                
+                % analyze forces:
+                t.forceN         = [d.peakF_d1, d.peakF_d2, d.peakF_d3, d.peakF_d4, d.peakF_d5]; % force per finger
+                t.forceN_stim    = sum(t.forceN.*t.chordStim,2) ./ t.numDigits; % avg. force across stimulated fingers
+                t.forceN_notStim = sum(t.forceN.*~t.chordStim,2) ./ (5-t.numDigits); % avg. force across non-stimulated fingers
+                t.forcePer         = t.forceN./d.targetForceStim; % force expressed as % of target stimulation force
+                t.forcePer_stim    = t.forceN_stim ./ d.targetForceStim; % "
+                t.forcePer_notStim = t.forceN_notStim ./ d.targetForceStim; % "
+                
+                % analyze behaviour:
+                t.trialType = d.falseResponse + 1; % 1=match, 2=mis-match
+                t.correct   = ~d.isError;
+                t.rxntime   = d.RT;
+                
+                % calculate points based on behaviour:
+                t.points = ones(size(t.correct));
+                idx1 = t.correct==1 & t.trialType==2; % correct rejection
+                idx2 = t.correct==0 & t.trialType==1; % false alarms
+                idx3 = t.correct==0 & t.trialType==2; % false rejections
+                t.points(idx1) = 10; 
+                t.points(idx2) = -1; 
+                t.points(idx3) = -10; 
+                
+                % categorize behavioural performance into response types:
+                v = zeros(size(t.points));
+                t.hit = v;
+                t.correctReject = v;
+                t.falseAlarm = v;
+                t.falseReject = v;
+                t.correctReject(idx1) = 1;
+                t.falseAlarm(idx2) = 1;
+                t.falseReject(idx3) = 1;
+                t.hit(~idx1 & ~idx2 & ~idx3) = 1;
+                
+                
+                if ismember(r,run{1}{s})
+                    t.sess = ones(numT,1).*1;
+                elseif ismember(r,run{2}{s})
+                    t.sess = ones(numT,1).*2;  
+                end
+                
+                
+                T=addstruct(T,t);
+            end    
+        end
+        dataFileOut = fullfile(behavDir,sprintf('%s_simpleAna.mat',filePrefix));
+        save(dataFileOut,'-struct','T');
+        varargout = {T};
+    case 'BEHA_simple_errorRates'
+        % calculate error rates
+        T = load(fullfile(behavDir,sprintf('%s_simpleAna.mat',filePrefix)));
+        T.numTrials = ones(size(T.sn));
+        T.mismatch = T.trialType==2;
+        D=tapply(T,{'sn'},{'hit','sum'},{'correctReject','sum'},...
+            {'falseAlarm','sum'},{'falseReject','sum'},...
+            {'numTrials','sum'},{'mismatch','sum'},{'correct','sum'});
+        % calc error rates
+        D.correctPer = D.correct./D.numTrials;
+        D.hitPer= D.hit./(D.numTrials-D.mismatch); % hit rate
+        D.faPer = D.falseAlarm./(D.numTrials-D.mismatch); % false alarm
+        D.crPer = D.correctReject./D.mismatch; % correct rejection
+        D.frPer = D.falseReject./(D.mismatch); % false regretion
+        % display error rates:
+        fprintf('mean ERROR rate (all conds): %1.2f +- %1.2f\n',mean(1-D.correctPer)*100,stderr(1-D.correctPer)*100);
+        fprintf('mean HIT RATE:          %1.2f +- %1.2f\n',mean(D.hitPer)*100,stderr(D.hitPer)*100);
+        fprintf('mean FALSE ALARM:       %1.2f +- %1.2f\n',mean(D.faPer)*100,stderr(D.faPer)*100);
+        fprintf('mean CORRECT REJECTION: %1.2f +- %1.2f\n',mean(D.crPer)*100,stderr(D.crPer)*100);
+        fprintf('mean FALSE REJECTION:   %1.2f +- %1.2f\n',mean(D.frPer)*100,stderr(D.frPer)*100);
+        
+        varargout = {D};
+    case 'BEHA_simple_forceAna'
+        % two analyses:
+        % 1. calculate avg stimulated force (across fingers, across trials)
+        % 2. finger x #fingers anova of stimulated forces:
+        T = load(fullfile(behavDir,sprintf('%s_simpleAna.mat',filePrefix)));
+        
+        % loop through trials, and arrange forces into anova-friendly
+        % structure:
+        D=[];
+        v=ones(5,1);
+        for ii=1:size(T.sn,1)
+            d.digit      = [1:5]';
+            d.forceN     = T.forceN(ii,:)';
+            d.forcePer   = T.forcePer(ii,:)';
+            d.stimulated = T.chordStim(ii,:)';
+            d.numDigits  = v.*T.numDigits(ii);
+            % indexing fields:
+            d.sn = v.*T.sn(ii);
+            d.run = v.*T.run(ii);
+            d.chordNum = v.*T.chordNum(ii);
+            d.trialNum = v.*T.trialNum(ii);
+            D=addstruct(D,d);
+        end
+        
+        % 1. avg. stimulated force (across fingers, across trials):
+%         t = tapply(D,{'sn'},{'forceN','mean'},{'forcePer','mean'},'subset',D.stimulated==1);
+%         fprintf('mean force (across fingers, across combos, across subjs): %1.2fN +- %1.2fN\n',mean(t.forceN),stderr(t.forceN));
+%         fprintf('mean % force: %1.2fN +- %1.2fN\n\n',mean(t.forcePer),stderr(t.forcePer));
+%         
+%         anovaMixed(D.forcePer,D.sn,'within',[D.digit D.numDigits],{'digit','numD'},'subset',D.stimulated==1);
+%         for s=unique(D.sn)'
+%             d=getrow(D,D.sn==s & D.stimulated==1);
+%             MANOVA2([d.digit d.numDigits],d.forceN);
+%         end
+        varargout = {D};
+    case 'corr_forceVsBold'
+        % correlate summed finger forces with PSC per participant per
+        % region:
+        B = pp1_encoding('getDists','conds',1:31,'sn',2:11,'glm',4,'roi',1:6);
+        F = pp1_imana('BEHA_simple_forceAna');
+        F = tapply(F,{'sn','chordNum','digit'},{'forceN','mean'},'subset',F.stimulated==1);
+        F = tapply(F,{'sn','chordNum'},{'forceN','sum'});
+        D =[];
+        for rr=1:6
+            f = pivottable(F.sn,F.chordNum,F.forceN,'mean');
+            b = B.pscCond(B.roi==rr,:);
+            r = corr(f',b');
+            d.sn   = [2:11]';
+            d.corr = diag(r);
+            d.roi  = ones(10,1).*rr;
+            D=addstruct(D,d);
+        end
+        varargout = {D};
+    case 'BEHA_forceMatrix'
+        T = load(fullfile(behavDir,sprintf('%s_simpleAna.mat',filePrefix)));
+        T = tapply(T,{'sn','run','chordNum'},{'forceN','mean'});
+        varargout = {T};
+        
     case 'getForceData'
         sn = pp1_imana('getSubjs');
         vararginoptions(varargin,{'sn'});
@@ -440,7 +594,7 @@ switch(what)
             for r = runs'
                 trials  = D.TN(D.BN==r);
                 try
-                    % deal with missing mov file from s04 run 1
+                    % deal with missing mov file from sn6 run 1
                     MOV = movload(fullfile(behavDir,sprintf('%s_%s_%02d.mov',filePrefix,subj_name{s},r)));
                 catch
                     fprintf('skipping %s_%s_%02d.mov - cannot load\n',filePrefix,subj_name{s},r);
@@ -697,6 +851,37 @@ switch(what)
         D.perErr = 1-hitRate;
         
         varargout = {D,P};
+    case 'SUBJ_getDprimePerRun'
+        sn = 1;
+        vararginoptions(varargin,{'sn'});
+        % load data
+        % arrange data into plotting structure
+        T = load(fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{sn}))); % T
+        % calculate percent incorrect trials for mismatch trials
+        T.numTrials = ones(size(T.sn));
+        P = getrow(T,T.falseResp==0);
+        P = tapply(P,{'sn','numDigits','chordNum','sess','run'},{'isError','sum'},{'numTrials','sum'}); % T has 5 rows per trial (one per finger)
+        P.isError   = P.isError./5; % correct for number of rows per trial
+        P.numTrials = P.numTrials./5;
+        P.perErr    = P.isError./P.numTrials;
+        falseAlarm  = sum(P.isError)/sum(P.numTrials);
+        % calculate percent correct for misleading trials (mismatch
+        % chord)
+        F = getrow(T,T.falseResp==1);
+        F = tapply(F,{'run','trial','sn','numDigits','chordNum','sess','run','falseResp'},{'isError','sum'});
+        F.isError = F.isError./5;
+        hitRate   = sum(F.isError==0)/size(F.sn,1);
+        D.hitRate    = hitRate;
+        D.falseAlarm = falseAlarm;
+        if hitRate==1 % if perfect hit rate, remove small constant to ensure norminv returns a real value (assumes no probability associated with 100% performance)
+            hitRate = hitRate - (1e-16);
+        end
+        % calculate D prime
+        D.sn     = sn;
+        D.dprime = norminv(hitRate) - norminv(falseAlarm);
+        D.perErr = 1-hitRate;
+        
+        varargout = {D,P};
     case 'SUBJ_getTaskPerformance'
         sn = 7;
         vararginoptions(varargin,{'sn'});
@@ -706,6 +891,20 @@ switch(what)
         % calculate percent incorrect trials
         T.numTrials = ones(size(T.sn));
         P = tapply(T,{'sn','numDigits','chordNum','falseResp','sess'},{'isError','sum'},{'numTrials','sum'}); % T has 5 rows per trial (one per finger)
+        P.isError   = P.isError./5; % correct for number of rows per trial
+        P.numTrials = P.numTrials./5;
+        P.perErr    = P.isError./P.numTrials;
+        
+        varargout = {P,T};
+    case 'SUBJ_getTaskPerformancePerRun'
+        sn = 7;
+        vararginoptions(varargin,{'sn'});
+        % load data
+        % arrange data into plotting structure
+        T = load(fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{sn}))); % T
+        % calculate percent incorrect trials
+        T.numTrials = ones(size(T.sn));
+        P = tapply(T,{'sn','falseResp','sess','run'},{'isError','sum'},{'numTrials','sum'}); % T has 5 rows per trial (one per finger)
         P.isError   = P.isError./5; % correct for number of rows per trial
         P.numTrials = P.numTrials./5;
         P.perErr    = P.isError./P.numTrials;
@@ -2195,7 +2394,7 @@ switch(what)
                 dataFile = fullfile(groupDir,'L.glm4.LDC.1d_config.164k.func.gii');
                 yaxisLabel = 'dissimilarity (a.u.)';
                 titleLabel = 'single finger dissimilarity';
-                clr = [0 0 0];%[0.8 0.27 0.5];
+                clr = [0.2 0.14 0.53];
             case 'LDC.2d'
                 % signal change for single fingers
                 dataFile = fullfile(groupDir,'L.glm4.LDC.2d_config.164k.func.gii');
@@ -2566,8 +2765,8 @@ switch(what)
                 F = gifti(fullfile(atlasDir,sprintf('fs_LR.164k.%s.flat.surf.gii',hemLetter{h})));
 %                 xlims=[-4 44];
 %                 ylims=[55 95];
-                xlims=[10 50];
-                ylims=[45 95];
+                xlims=[0 50];
+                ylims=[50 100];
         end
         
         % Get the X-Y coordinates for all tiles 
@@ -5978,8 +6177,8 @@ switch(what)
     case 'TSL:setThres'
         % case to ensure consistent thresholding across TSL cases:
         nTessel = 1442; % options: 162, 362, 642, 1002, 1442
-        prop=0.35;
-        distThres=0.003;
+        prop=0.2;
+        distThres=0.005;
         varargout = {nTessel,prop,distThres};
     case 'TSL:check'
         % threshold tessels that would be selected based on distance
@@ -6069,10 +6268,9 @@ switch(what)
             numRegressors = 32; % 31 chords + thumb response
         end
         fprintf('extracting betas\n');
-        %T = load(fullfile(regDir,sprintf('glm%d_tessels%d_betas.mat',glm,nTessel)));
-        T=[];
         % harvest
         for s=sn % for each subj
+            T=[];
             subjName = I.origSN{s};
             fprintf('%s...',subjName);
             % load files
@@ -6122,7 +6320,7 @@ switch(what)
             end
             fprintf('..done\n');
             % save T
-            save(fullfile(regDir,sprintf('glm%d_tessels%d_betas_NEW.mat',glm,nTessel)),'-struct','T'); 
+            save(fullfile(regDir,sprintf('glm%d_%s_tessels%d_betas.mat',glm,subj_name{s}, nTessel)),'-struct','T'); 
         end
         % save T
        % save(fullfile(regDir,sprintf('glm%d_tessels%d_betas.mat',glm,nTessel)),'-struct','T'); 
@@ -6320,7 +6518,225 @@ switch(what)
             save(G, outfile);
             fprintf('Hemisphere: %d\n',h);
         end
-    
+        
+    case 'TSL:makeTesselG'
+        % wrapper to perform SFT analysis with data from tessels
+        % restricts analysis to voxels that show significant finger resposnes (voxel F-stat > F-crit)
+        I   = pp1_imana('LIST_subjs');
+        sn  = 2:11;
+        glm = 4;
+        vararginoptions(varargin,{'glm','sn'});
+        
+        % define which tessels to include in left-hemi:
+        hemi = 1;
+        [nTessel,prop,distThres] = pp1_imana('TSL:setThres');
+        takeTessels = pp1_imana('TSL:select','nTessel',nTessel,'hemi',hemi,'prop',prop,'distThres',distThres);
+        
+        D = []; % participant-average G structure
+        for ii=sn
+            % load subject's tessel betas
+            T = load(fullfile(regDir,sprintf('glm%d_%s_tessels%d_betas.mat',glm,subj_name{ii},nTessel)));
+            T = getrow(T,T.hemi==hemi & ismember(T.tesselNum,takeTessels));
+            for jj=takeTessels
+                t=getrow(T,T.tesselNum==jj); % data from this tessel region
+                b.tt = cell2mat(t.tt);
+                b.run = cell2mat(t.run);
+                b.betaW = cell2mat(t.betaW);
+                try
+                    b = getrow(b,b.tt<32); % drop all non-chord regressors
+                    Gsubj = pcm_estGCrossval(b.betaW,b.run,b.tt);
+                    Gsubj = pcm_makePD(Gsubj);
+                    d.g = rsa_vectorizeIPM(Gsubj);
+                    d.hasData = true;
+                catch % no data from this tessel for this participant
+                    d.g = nan(1,496);
+                    d.hasData = false;
+                end
+                d.sn = t.sn;
+                d.roi = t.roi;
+                d.hemi = t.hemi;
+                D=addstruct(D,d);
+            end
+        end
+        D=tapply(D,{'roi'},{'g','nanmean'});
+        save(fullfile(regDir,sprintf('glm%d_tessels%d_G.mat',glm,nTessel)),'-struct','D');
+        varargout = {D};
+    case 'TSL:encodingModels'
+        sn  = 2:11;
+        glm = 4;
+        
+        % define which tessels to include in left-hemi:
+        hemi = 1;
+        [nTessel,prop,distThres] = pp1_imana('TSL:setThres');
+        takeTessels = pp1_imana('TSL:select','nTessel',nTessel,'hemi',hemi,'prop',prop,'distThres',distThres);
+        
+        G = load(fullfile(regDir,sprintf('glm%d_tessels%d_G.mat',glm,nTessel)));
+        D=[];
+        for ii=sn
+            Y = {}; partVec = {}; condVec = {}; d=[];
+            % load subject's tessel betas
+            T = load(fullfile(regDir,sprintf('glm%d_%s_tessels%d_betas.mat',glm,subj_name{ii},nTessel)));
+            T = getrow(T,T.hemi==hemi & ismember(T.tesselNum,takeTessels));
+            % arrange into data structure for encoding model fitting:
+            for jj=takeTessels
+                t=getrow(T,T.tesselNum==jj); % data from this tessel region
+                b.tt = cell2mat(t.tt);
+                b.run = cell2mat(t.run);
+                b.betaW = cell2mat(t.betaW);
+                try
+                    b = getrow(b,b.tt<32); % drop all non-chord regressors
+                    Y{end+1}       = b.betaW;
+                    partVec{end+1} = b.run;
+                    condVec{end+1} = b.tt;
+                catch % no data from this tessel for this participant
+                    Y{end+1}       = [];
+                    partVec{end+1} = [];
+                    condVec{end+1} = [];
+                    continue
+                end
+            end
+            % fit encoding models to data from these tessels in this
+            % subject:
+            d = pp1_encoding('encoding_Passive_tessels',Y,partVec,condVec,G,takeTessels);
+            v = ones(size(d.tessel));
+            d.sn = v.*ii;
+            save(fullfile(regDir,sprintf('glm%d_%s_tessels%d_encodingFits.mat',glm,subj_name{ii},nTessel)),'-struct','d');
+            D = addstruct(D,d);
+        end
+        save(fullfile(regDir,sprintf('glm%d_tessels%d_encodingFits.mat',glm,nTessel)),'-struct','D');
+        varargout = {D};
+    case 'TSL:mapTessels_encoding'
+        hname = {'CortexLeft','CortexRight'}; 
+        glm = 4;
+        nTessel = pp1_imana('TSL:setThres');
+        % load model fits for thresholded tessels:
+        T = load(fullfile(regDir,sprintf('glm%d_tessels%d_encodingFits.mat',glm,nTessel)));
+        % calculate normalized model fits:
+        nCeil = 8;
+        nNull = 1;
+        numModels=8;
+        T.r_norm = T.r_test - kron(T.r_test(T.model==nNull),ones(numModels,1));
+        T.r_norm = T.r_norm./kron(T.r_norm(T.model==nCeil),ones(numModels,1));
+        
+        % map left hemi
+        h = 1;
+        G = gifti(fullfile(atlasDir,sprintf('Icosahedron-%d.164k.%s.label.gii',nTessel,hemLetter{h})));
+        data = nan(size(G.cdata,1),9);
+        for r=unique(T.tessel)' % loop through tessels we have analyzed data from
+          t = getrow(T,T.tessel==r);
+          idx = G.cdata(:,1)==r;
+          for ii=2:7
+             data(idx,ii-1) = median(t.r_norm(t.model==ii));
+          end
+          data(idx,ii) = median(t.r_norm(t.model==3))-median(t.r_norm(t.model==2)); % 2f int - linear model fits
+          data(idx,ii+1) = median(t.r_norm(t.model==3))-median(t.r_norm(t.model==7)); % 2f int - flexible model fits
+          data(idx,ii+2) = median(1-t.r_norm(t.model==2)); % 1 - linear fits
+        end
+        colnames = {'linear_fit','2f_fit','3f_fit','4f_fit','5f_fit','flex_fit','2f-lin_fits','2f-flex_fits','1-lin_fits'};
+        outfile = fullfile(wbDir, 'group_164k', sprintf('encodingFits.tessels%d.%s.glm%d.164k.func.gii', nTessel, hemLetter{h}, glm));
+        G       = surf_makeFuncGifti(data,'anatomicalStruct',hname{h},'columnNames',colnames);
+        save(G, outfile);
+        fprintf('Hemisphere: %d\n',h);
+    case 'TSL:mapTessels_encoding_ttest'
+        hname = {'CortexLeft','CortexRight'}; 
+        glm = 4;
+        nTessel = pp1_imana('TSL:setThres');
+        % load model fits for thresholded tessels:
+        T = load(fullfile(regDir,sprintf('glm%d_tessels%d_encodingFits.mat',glm,nTessel)));
+        % calculate normalized model fits:
+        nCeil = 8;
+        nNull = 1;
+        numModels=8;
+        T.r_norm = T.r_test - kron(T.r_test(T.model==nNull),ones(numModels,1));
+        T.r_norm = T.r_norm./kron(T.r_norm(T.model==nCeil),ones(numModels,1));
+        
+        % map left hemi
+        h = 1;
+        G = gifti(fullfile(atlasDir,sprintf('Icosahedron-%d.164k.%s.label.gii',nTessel,hemLetter{h})));
+        data = nan(size(G.cdata,1),9);
+        for r=unique(T.tessel)' % loop through tessels we have analyzed data from
+          t = getrow(T,T.tessel==r);
+          idx = G.cdata(:,1)==r;
+          % model fits:
+          for ii=2:7
+             [tval,p]=ttest(t.r_norm(t.model==ii),[],2,'onesample'); %2-sided t-test against null fit
+             if p<0.05
+                 data(idx,ii-1) = median(t.r_norm(t.model==ii));
+             end
+          end
+          % difference in model fits:
+          x = t.r_norm(t.model==3) - t.r_norm(t.model==2); % 2f int - linear model fits
+          [tval,p]=ttest(x,[],2,'onesample');
+          if p<0.05
+              data(idx,ii) = median(x);
+          end
+          x = t.r_norm(t.model==3) - t.r_norm(t.model==7); % 2f int - flexible model fits
+          [tval,p]=ttest(x,[],2,'onesample');
+          if p<0.05
+              data(idx,ii+1) = median(x);
+          end
+          x = 1 - t.r_norm(t.model==2); % 1 - linear fits
+          [tval,p]=ttest(x,[],2,'onesample');
+          if p<0.05
+              data(idx,ii+2) = median(x);
+          end
+        end
+        colnames = {'linear_fit','2f_fit','3f_fit','4f_fit','5f_fit','flex_fit','2f-lin_fits','2f-flex_fits','1-lin_fits'};
+        outfile = fullfile(wbDir, 'group_164k', sprintf('encodingFits_ttest.tessels%d.%s.glm%d.164k.func.gii', nTessel, hemLetter{h}, glm));
+        G       = surf_makeFuncGifti(data,'anatomicalStruct',hname{h},'columnNames',colnames);
+        save(G, outfile);
+        fprintf('Hemisphere: %d\n',h);
+    case 'TSL:mapTessels_encoding_signtest'
+        hname = {'CortexLeft','CortexRight'}; 
+        glm = 4;
+        nTessel = pp1_imana('TSL:setThres');
+        % load model fits for thresholded tessels:
+        T = load(fullfile(regDir,sprintf('glm%d_tessels%d_encodingFits.mat',glm,nTessel)));
+        % calculate normalized model fits:
+        nCeil = 8;
+        nNull = 1;
+        numModels=8;
+        T.r_norm = T.r_test - kron(T.r_test(T.model==nNull),ones(numModels,1));
+        T.r_norm = T.r_norm./kron(T.r_norm(T.model==nCeil),ones(numModels,1));
+        
+        % map left hemi
+        h = 1;
+        G = gifti(fullfile(atlasDir,sprintf('Icosahedron-%d.164k.%s.label.gii',nTessel,hemLetter{h})));
+        data = nan(size(G.cdata,1),9);
+        for r=unique(T.tessel)' % loop through tessels we have analyzed data from
+          t = getrow(T,T.tessel==r);
+          idx = G.cdata(:,1)==r;
+          % model fits:
+          for ii=2:7
+             p=signtest(t.r_norm(t.model==ii)); %2-sided signtest against 0 (null fit)
+             if p<0.05
+                 data(idx,ii-1) = median(t.r_norm(t.model==ii));
+             end
+          end
+          % difference in model fits:
+          x = t.r_norm(t.model==3) - t.r_norm(t.model==2); % 2f int - linear model fits
+          p=signtest(x);
+          if p<0.05
+              data(idx,ii) = median(x);
+          end
+          x = t.r_norm(t.model==3) - t.r_norm(t.model==7); % 2f int - flexible model fits
+          p=signtest(x);
+          if p<0.05
+              data(idx,ii+1) = median(x);
+          end
+          x = 1 - t.r_norm(t.model==2); % 1 - linear fits
+          p=signtest(x);
+          if p<0.05
+              data(idx,ii+2) = median(x);
+          end
+        end
+        colnames = {'linear_fit','2f_fit','3f_fit','4f_fit','5f_fit','flex_fit','2f-lin_fits','2f-flex_fits','1-lin_fits'};
+        outfile = fullfile(wbDir, 'group_164k', sprintf('encodingFits_signtest.tessels%d.%s.glm%d.164k.func.gii', nTessel, hemLetter{h}, glm));
+        G       = surf_makeFuncGifti(data,'anatomicalStruct',hname{h},'columnNames',colnames);
+        save(G, outfile);
+        fprintf('Hemisphere: %d\n',h);
+         
+
         
     case '0' % ------------ PLOT: figures. --------------------------------
         % The FIG cases usually harvest some data from ROI stats structures.
