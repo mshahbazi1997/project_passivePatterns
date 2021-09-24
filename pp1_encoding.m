@@ -78,6 +78,11 @@ switch what
         T=Tdata; clear Tgauss Tsparse Tdata
         T.roiPlotNum = roiPlotNum(T.roi)';
         
+        pivottable([],T.roiPlotNum,T.numVoxF,'mean');
+        pivottable([],T.roiPlotNum,T.numVoxF,'stderr');
+        pivottable([],T.roiPlotNum,(T.numVoxF./T.numVoxTot).*100,'mean');
+        pivottable([],T.roiPlotNum,(T.numVoxF./T.numVoxTot).*100,'stderr');
+        
         % plot single subject lines:
         CAT.markertype = 'none';
         CAT.linecolor  = {[0.75 0.75 0.75]};
@@ -118,16 +123,246 @@ switch what
         CAT.linewidth   = {1.25,1.25,1.25,2,1.25,1.25};
         CAT.markertype  = 'o';
         % plot:
-        lineplot([T.digitMax T.digit],T.tuningNorm,'plotfcn','nanmean','CAT',CAT,'split',T.roiPlotNum,'leg',{'4a','4p','3a','3b','1','2'},'errorfcn','stderr','subset',T.digit~=T.digitMax)
+%         lineplot([T.digitMax T.digit],T.tuningNorm,'plotfcn','nanmean','CAT',CAT,'split',T.roiPlotNum,'leg',{'4a','4p','3a','3b','1','2'},'errorfcn','stderr','subset',T.digit~=T.digitMax)
+%         set(gca,'xticklabel',{'1.2','1.3','1.4','1.5','2.1','2.3','2.4','2.5','3.1','3.2','3.4','3.5','4.1','4.2','4.3','4.5','5.1','5.2','5.3','5.4'});
+        lineplot([T.digitMax T.digit],T.tuningNorm,'plotfcn','nanmean','CAT',CAT,'split',T.roiPlotNum,'leg',{'4a','4p','3a','3b','1','2'},'errorfcn','stderr')
+        set(gca,'xticklabel',{'1.1','1.2','1.3','1.4','1.5','2.1','2.2','2.3','2.4','2.5','3.1','3.2','3.3','3.4','3.5','4.1','4.2','4.3','4.4','4.5','5.1','5.2','5.3','5.4','5.5'});
         ylabel('normalized activity');
-        set(gca,'xticklabel',{'1.2','1.3','1.4','1.5','2.1','2.3','2.4','2.5','3.1','3.2','3.4','3.5','4.1','4.2','4.3','4.5','5.1','5.2','5.3','5.4'});
         xlabel('tuned finger : other finger');
         ylim([0 1]);
         
         varargout = {T};    
-    case 'plot_encodingFits'
-        % plots the normalized encoding model fits
+    case 'stats_encodingFits'
+        % case to do statistical tests of model fits
+        glm = 4;
+        sn = 2:11;
+        roi = [1:6];
+        roiNames = {'3a','3b','1','2','4a','4p','S2'};
+        roiPlotNum = [3 4 5 6 1 2 7];
+        roiPlotNames = {'4a','4p','3a','3b','1','2','S2'};
         
+        % load data:
+       % T = load(fullfile(dataDir,sprintf('glm%d_encodingFits_passive_Final.mat',glm)));
+        T = load(fullfile(dataDir,sprintf('glm%d_repModelFits.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        % find the null and noise ceiling models:
+        numModels  = numel(unique(T.model));
+        modelNull  = unique(T.model(strcmp(T.modelName,'null')));
+        modelNCeil = unique(T.model(strcmp(T.modelName,'noise ceiling')));
+        % calculate normalized pearson's R (0=null, 1=lower noise ceiling)
+        T.r_norm = T.r_test - kron(T.r_test(T.model==modelNull),ones(numModels,1));
+        T.r_norm = T.r_norm./kron(T.r_norm(T.model==modelNCeil),ones(numModels,1));
+        T.roiPlotNum = roiPlotNum(T.roi)';
+        
+        % find the other model ids:
+        modelLinear  = unique(T.model(strcmp(T.modelName,'linear')));
+        model2f      = unique(T.model(strcmp(T.modelName,'2finger')));
+        model3f      = unique(T.model(strcmp(T.modelName,'3finger')));
+        model4f      = unique(T.model(strcmp(T.modelName,'4finger')));
+        modelFlex    = unique(T.model(strcmp(T.modelName,'flexible linear')));
+        model2f_noAdjacent   = unique(T.model(strcmp(T.modelName,'2finger no adjacent')));
+        model2f_onlyAdjacent = unique(T.model(strcmp(T.modelName,'2finger no non-adjacent')));
+        
+        % do stats:
+        % make pivottables:
+        fprintf('MEAN model fits:\n');
+        pivottable(T.model,T.roiPlotNum,T.r_norm,'mean','subset',~ismember(T.model,[modelNull,modelNCeil]));
+        fprintf('SEM model fits:\n');
+        pivottable(T.model,T.roiPlotNum,T.r_norm,'stderr','subset',~ismember(T.model,[modelNull,modelNCeil]));
+
+        % LINEAR MODEL RESULTS
+        fprintf('\n----------------------------------------\n');
+        fprintf('\n--- LINEAR MODEL FITS ------------------\n');
+        fprintf('\n----------------------------------------\n');
+        % compare normalized null vs. linear model fits:
+        fprintf('normalized null vs. linear model fits:\n');
+        idx = ismember(T.model,[modelNull,modelLinear]);
+        stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',idx);
+        stats.eff.p
+        fprintf('\n----------------------------------------\n');
+        % compare normalized linear model fit across regions:
+        fprintf('normalized linear model fit across regions:\n');
+        stats = anovaMixed(T.r_norm,T.sn,'within',[T.roiPlotNum],{'roi'},'subset',T.model==modelLinear);
+        stats.eff.p
+        fprintf('\n----------------------------------------\n');
+        % compare linear model fit in BA 3b vs. other SMc regions:
+        % (two sided paired t-test, bonferroni corrected alpha=0.01)
+        fprintf('linear model fit in BA 3b vs. other SMc regions:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==4 & T.model==modelLinear),T.r_norm(T.roiPlotNum==rr & T.model==modelLinear),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        % compare noise ceiling vs. linear model fits:
+        fprintf('noise ceiling vs. linear model fit (2-sided paired t-tests):\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==modelNCeil),T.r_norm(T.roiPlotNum==rr & T.model==modelLinear),2,'paired');
+            fprintf('\n')
+        end
+
+
+        % 2FINGER MODEL RESULTS
+        fprintf('\n----------------------------------------\n');
+        fprintf('\n--- 2FINGER MODEL FITS -----------------\n');
+        fprintf('\n----------------------------------------\n');
+        % compare normalized linear and 2f int model fits:
+        fprintf('normalized linear vs. 2f int model fits:\n');
+        idx = ismember(T.model,[modelLinear,model2f]);
+        stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',idx);
+        stats.eff.p
+        fprintf('\n----------------------------------------\n');
+        % compare noise ceiling vs. 2f model fits:
+        fprintf('noise ceiling vs. 2f model fit (2-sided paired t-tests):\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==modelNCeil),T.r_norm(T.roiPlotNum==rr & T.model==model2f),2,'paired');
+            fprintf('\n')
+        end
+
+
+        % ADJACENT vs NON-ADJACENT FINGERS
+        fprintf('\n----------------------------------------\n');
+        fprintf('\n--- ADJACENT VS. NON-ADJACENT FITS -----\n');
+        fprintf('\n----------------------------------------\n');
+        % ttest all vs. neighbouring interactions:
+        fprintf('two-sided paired ttest NO ADJACENT PAIRS vs. ALL PAIRS model fits:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==model2f_noAdjacent),T.r_norm(T.roiPlotNum==rr & T.model==model2f),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        % ttest all vs. non-neighbouring interactions:
+        fprintf('two-sided paired ttest NO NON-ADJACENT PAIRS vs. ALL PAIRS model fits:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==model2f_onlyAdjacent),T.r_norm(T.roiPlotNum==rr & T.model==model2f),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        % compare neighbouring vs. non-neighbouring model fits:
+        fprintf('NO ADJACENT vs. NO NON-ADJACENT model fits:\n');
+        idx = ismember(T.model,[model2f_noAdjacent,model2f_onlyAdjacent]);
+        stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',idx);
+        stats.eff.p
+        fprintf('\n----------------------------------------\n');
+        % ttest neighbouring vs. non-neighbouring model fits:
+        fprintf('two-sided paired ttest NO ADJACENT vs. NO NON-ADJACENT model fits:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==model2f_noAdjacent),T.r_norm(T.roiPlotNum==rr & T.model==model2f_onlyAdjacent),2,'paired');
+            fprintf('\n')
+        end
+
+
+        % 3 & 4FINGER MODEL RESULTS
+        fprintf('\n----------------------------------------\n');
+        fprintf('\n--- 3FINGER & 4FINGER MODEL FITS -------\n');
+        fprintf('\n----------------------------------------\n');
+        % compare noise ceiling vs. 3f model fits:
+        fprintf('noise ceiling vs. 3f model fit (2-sided paired t-tests):\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==modelNCeil),T.r_norm(T.roiPlotNum==rr & T.model==model3f),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        % compare noise ceiling vs. 4f model fits:
+        fprintf('noise ceiling vs. 4f model fit (2-sided paired t-tests):\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==modelNCeil),T.r_norm(T.roiPlotNum==rr & T.model==model4f),2,'paired');
+            fprintf('\n')
+        end
+
+
+        % FLEXIBLE MODEL RESULTS
+        fprintf('\n----------------------------------------\n');
+        fprintf('\n--- FLEXIBLE MODEL FITS ----------------\n');
+        fprintf('\n----------------------------------------\n');
+        % compare flexible vs. linear model fits in each region:
+        % (two sided paired t-test, bonferroni corrected alpha=0.0083)
+        fprintf('flexible vs. linear model fits in each region:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==modelFlex),T.r_norm(T.roiPlotNum==rr & T.model==modelLinear),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        % compare 2finger vs. flexible model fits in each region:
+        % (two sided paired t-test, bonferroni corrected alpha=0.0083)
+        fprintf('2finger vs. flexible model fits in each region:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==model2f),T.r_norm(T.roiPlotNum==rr & T.model==modelFlex),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        D1=getrow(T,T.model==model2f);
+        D2=getrow(T,T.model==modelFlex);
+        D1.diff=D1.r_norm-D2.r_norm;
+        fprintf('MEAN 2Finger-Flex fits:\n');
+        pivottable([],D1.roiPlotNum,D1.diff,'mean')
+        fprintf('SEM 2Finger-Flex fits:\n');
+        pivottable([],D1.roiPlotNum,D1.diff,'stderr')
+        fprintf('\n----------------------------------------\n');
+        % compare 3finger vs. flexible model fits in each region:
+        % (two sided paired t-test, bonferroni corrected alpha=0.0083)
+        fprintf('3finger vs. flexible model fits in each region:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==model3f),T.r_norm(T.roiPlotNum==rr & T.model==modelFlex),2,'paired');
+            fprintf('\n')
+        end
+        fprintf('\n----------------------------------------\n');
+        fprintf('4finger vs. flexible model fits in each region:\n');
+        for rr=1:6
+            fprintf('ROI %s\n',roiPlotNames{rr});
+            ttest(T.r_norm(T.roiPlotNum==rr & T.model==model4f),T.r_norm(T.roiPlotNum==rr & T.model==modelFlex),2,'paired');
+            fprintf('\n')
+        end
+            
+        varargout = {T};
+    case 'plot_encodingFits'
+        % plots the normalized representational model fits     
+        glm = 4;
+        sn = 2:11;
+        roi = [1:6];
+        roiNames = {'3a','3b','1','2','4a','4p'};
+        roiPlotNum = [3 4 5 6 1 2 7];
+        roiPlotNames = {'4a','4p','3a','3b','1','2'};
+        
+        % load data:
+       % T = load(fullfile(dataDir,sprintf('glm%d_encodingFits_passive_Final.mat',glm)));
+        T = load(fullfile(dataDir,sprintf('glm%d_repModelFits.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        % find the null and noise ceiling models:
+        numModels  = numel(unique(T.model));
+        modelNull  = unique(T.model(strcmp(T.modelName,'null')));
+        modelNCeil = unique(T.model(strcmp(T.modelName,'noise ceiling')));
+        % calculate normalized pearson's R (0=null, 1=lower noise ceiling)
+        T.r_norm = T.r_test - kron(T.r_test(T.model==modelNull),ones(numModels,1));
+        T.r_norm = T.r_norm./kron(T.r_norm(T.model==modelNCeil),ones(numModels,1));
+        T.roiPlotNum = roiPlotNum(T.roi)';
+
+        % nice plot
+        modelClrs = {[31 76 147]./255, [180 75 131]./255, [225 131 91]./255, [246 205 81]./255, [31 76 147]./255, [0 0 0], [0 0 0]};
+        sty = style.custom(modelClrs); 
+        sty.general.linestyle = {'-','-','-','-','-.','-','-'};
+        sty.general.markerfill = [{modelClrs{1:6}},{[1 1 1]}];
+        
+        plt.line(T.roiPlotNum,T.r_norm,'split',T.model,'plotfcn','mean','style',sty,'subset',~ismember(T.model,[modelNull,modelNCeil]));
+        ylabel(sprintf('normalized model fits\n(Pearson''s R)'));
+        xlabel('Brodmann area');
+        title('encoding model fits - passive');
+        set(gca,'xticklabel',roiPlotNames);
+                
+        varargout = {T};
+    
+    case 'plot_encodingFits_forces'
+        % plots the normalized encoding model fits from the force analysis
         doStats=1;
         
         glm = 4;
@@ -141,117 +376,7 @@ switch what
         numModels=8;
         
         % load data:
-        T = load(fullfile(dataDir,sprintf('glm%d_encodingFits_passive_Final.mat',glm)));
-        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
-        % calculate normalized pearson's R (0=null, 1=lower noise ceiling)
-        T.r_norm = T.r_test - kron(T.r_test(T.model==nNull),ones(numModels,1));
-        T.r_norm = T.r_norm./kron(T.r_norm(T.model==nCeil),ones(numModels,1));
-        T.roiPlotNum = roiPlotNum(T.roi)';
-        
-        
-        % nice plot
-        ch = plt.helper.get_shades(5,'gray');
-        sty = style.custom([{ch{1:4}} {[0.3 0 0.7]}]); 
-        sty.general.linestyle = {'-','-','-','-','-.'};
-        
-        plt.line(T.roiPlotNum,T.r_norm,'split',T.model,'plotfcn','mean','style',sty,'subset',T.model>1 & T.model<8 & T.model~=6);
-        ylabel(sprintf('normalized model fits\n(Pearson''s R)'));
-        xlabel('Brodmann area');
-        title('encoding model fits - passive');
-        set(gca,'xticklabel',roiPlotNames);
-        
-        if doStats
-            % make pivottables:
-            fprintf('MEAN model fits:\n');
-            pivottable(T.model,T.roiPlotNum,T.r_norm,'mean','subset',~ismember(T.model,[1,6,8]));
-            fprintf('SEM model fits:\n');
-            pivottable(T.model,T.roiPlotNum,T.r_norm,'stderr','subset',~ismember(T.model,[1,6,8]));
-            fprintf('\n----------------------------------------\n');
-            % compare normalized null vs. linear model fits:
-            fprintf('normalized null vs. linear model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',T.model<3);
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare normalized linear model fit across regions:
-            fprintf('normalized linear model fit across regions:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.roiPlotNum],{'roi'},'subset',T.model==2);
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare linear model fit in BA 3b vs. other SMc regions:
-            % (two sided paired t-test, bonferroni corrected alpha=0.01)
-            fprintf('linear model fit in BA 3b vs. other SMc regions:\n');
-            for rr=1:6
-                fprintf('ROI %s\n',roiPlotNames{rr});
-                ttest(T.r_norm(T.roiPlotNum==4 & T.model==2),T.r_norm(T.roiPlotNum==rr & T.model==2),2,'paired');
-                fprintf('\n')
-            end
-            fprintf('\n----------------------------------------\n');
-            % compare normalized linear and 2f int model fits:
-            fprintf('normalized linear vs. 2f int model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',T.model>1 & T.model<4);
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare predictive performance gain of 2f vs. linear model in SMc regions vs. BA 3b:
-            % (two sided paired t-test, bonferroni corrected alpha=0.01)
-            fprintf('predictive performance gain of 2f vs. linear model in SMc regions vs. BA 3b:\n');
-            diff3b = T.r_norm(T.roiPlotNum==4 & T.model==3) - T.r_norm(T.roiPlotNum==4 & T.model==2);
-            for rr=1:6
-                diffFit = T.r_norm(T.roiPlotNum==rr & T.model==3) - T.r_norm(T.roiPlotNum==rr & T.model==2);
-                fprintf('ROI %s\n',roiPlotNames{rr});
-                ttest(diffFit,diff3b,2,'paired');
-                fprintf('\n')
-            end
-            fprintf('\n----------------------------------------\n');
-            % compare 2f vs. 3f model fits:
-            fprintf('2f vs. 3f model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[3,4]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare 3f vs. 4f model fits:
-            fprintf('3f vs. 4f model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[4,5]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare linear vs. flexible model fits:
-            fprintf('linear vs. flexible model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[2,7]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare 2f int vs. flexible model fits:
-            fprintf('2f int vs. flexible model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[3,7]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % compare flexible vs. 2f int model fits in each region:
-            % (two sided paired t-test, bonferroni corrected alpha=0.01)
-            fprintf('flexible vs. 2f int model fits in each region:\n');
-            for rr=1:6
-                fprintf('ROI %s\n',roiPlotNames{rr});
-                ttest(T.r_norm(T.roiPlotNum==rr & T.model==3),T.r_norm(T.roiPlotNum==rr & T.model==7),1,'paired');
-                fprintf('\n')
-            end
-            fprintf('\n----------------------------------------\n');
-        end
-        
-        varargout = {T};
-    
-    case 'plot_encodingFits_neighbours'
-        % plots the normalized encoding model fits from the neighbours
-        % only/ no neighbours finger pair analyses
-        doStats=1;
-        
-        glm = 4;
-        sn = 2:11;
-        roi = [1:6];
-        roiNames = {'3a','3b','1','2','4a','4p','S2'};
-        roiPlotNum = [3 4 5 6 1 2 7];
-        roiPlotNames = {'4a','4p','3a','3b','1','2','S2'};
-        nCeil = 7;
-        nNull = 1;
-        numModels=7;
-        
-        % load data:
-        T = load(fullfile(dataDir,sprintf('glm%d_encodingFits_passive_neighbours.mat',glm)));
+        T = load(fullfile(dataDir,sprintf('glm%d_encodingFits_passive_force.mat',glm)));
         T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
         % calculate normalized pearson's R (0=null, 1=noise ceiling)
         T.r_norm = T.r_test - kron(T.r_test(T.model==nNull),ones(numModels,1));
@@ -259,90 +384,35 @@ switch what
         T.roiPlotNum = roiPlotNum(T.roi)';
         
         % plot
-        ch = plt.helper.get_shades(5,'gray');
-        sty = style.custom({[ch{2}],[ch{3}],[1 0 0],[0 0 1]}); 
-        sty.general.linestyle = {'-','-','-.','-.'};
+        ch = plt.helper.get_shades(6,'jet');
+        sty = style.custom(ch); 
+        sty.general.linestyle = {'-','-','-','-','-','-'};
         
-        plt.line(T.roiPlotNum,T.r_norm,'split',T.model,'plotfcn','mean','style',sty,'subset',ismember(T.model,[2,3,4,5]));
+        plt.line(T.roiPlotNum,T.r_norm,'split',T.model,'plotfcn','mean','style',sty,'subset',ismember(T.model,[2:7]));
         ylabel(sprintf('normalized model fits\n(Pearson''s R)'));
         xlabel('Brodmann area');
-        title('encoding model fits - passive - neighbours');
+        title('encoding model fits - passive - forces');
         set(gca,'xticklabel',roiPlotNames);
         
         if doStats
             
             % make pivottables:
-            fprintf('MEAN model fits [2f int, 2f no neighbours, 2f only neighbours]:\n');
-            pivottable(T.model,T.roiPlotNum,T.r_norm,'mean','subset',ismember(T.model,[3,4,5]));
+            fprintf('MEAN model fits:\n');
+            pivottable(T.model,T.roiPlotNum,T.r_norm,'mean');
             fprintf('SEM model fits:\n');
-            pivottable(T.model,T.roiPlotNum,T.r_norm,'stderr','subset',ismember(T.model,[3,4,5]));
+            pivottable(T.model,T.roiPlotNum,T.r_norm,'stderr');
             fprintf('\n----------------------------------------\n');
             
-%             % evaluate neighbouring interactions
-%             fprintf('linear vs. 2f only neighbours model fits:\n');
-%             stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[2,5]));
-%             stats.eff.p
-%             fprintf('\n----------------------------------------\n');
-%             % ttest linear vs. neighbouring interactions:
-%             fprintf('two-sided paired ttest LINEAR vs. ONLY NEIGHBOURS model fits:\n');
-%             for rr=1:6
-%                 fprintf('ROI %s\n',roiPlotNames{rr});
-%                 ttest(T.r_norm(T.roiPlotNum==rr & T.model==2),T.r_norm(T.roiPlotNum==rr & T.model==5),2,'paired');
-%                 fprintf('\n')
-%             end
-%             fprintf('\n----------------------------------------\n');
-%             
-%             % evaluate non-neighbouring interactions
-%             fprintf('linear vs. no neighbours model fits:\n');
-%             stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[2,4]));
-%             stats.eff.p
-%             fprintf('\n----------------------------------------\n');
-%             % ttest linear vs. non-neighbouring interactions:
-%             fprintf('two-sided paired ttest LINEAR vs. NO NEIGHBOURS model fits:\n');
-%             for rr=1:6
-%                 fprintf('ROI %s\n',roiPlotNames{rr});
-%                 ttest(T.r_norm(T.roiPlotNum==rr & T.model==2),T.r_norm(T.roiPlotNum==rr & T.model==4),2,'paired');
-%                 fprintf('\n')
-%             end
-%             fprintf('\n----------------------------------------\n');
+            fprintf('compare LINEAR with LINEAR (FORCES) fits:\n');
+            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[2,4]));
+            stats.eff.p
+            fprintf('\n----------------------------------------\n');
             
             % ttest all vs. neighbouring interactions:
-            fprintf('two-sided paired ttest ONLY NEIGHBOURS vs. ALL model fits:\n');
+            fprintf('two-sided paired ttest Linear SF vs. Force SF:\n');
             for rr=1:6
                 fprintf('ROI %s\n',roiPlotNames{rr});
-                ttest(T.r_norm(T.roiPlotNum==rr & T.model==5),T.r_norm(T.roiPlotNum==rr & T.model==3),2,'paired');
-                fprintf('\n')
-            end
-            fprintf('\n----------------------------------------\n');
-            % ttest all vs. non-neighbouring interactions:
-            fprintf('two-sided paired ttest NO NEIGHBOURS vs. ALL model fits:\n');
-            for rr=1:6
-                fprintf('ROI %s\n',roiPlotNames{rr});
-                ttest(T.r_norm(T.roiPlotNum==rr & T.model==4),T.r_norm(T.roiPlotNum==rr & T.model==3),2,'paired');
-                fprintf('\n')
-            end
-            fprintf('\n----------------------------------------\n');
-            
-            % some ANOVAs:
-            fprintf('compare ONLY NEIGHBOURS with All pairs model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[3,5]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            fprintf('compare NO NEIGHBOURS with All pairs model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[3,4]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            
-            % compare neighbouring vs. non-neighbouring model fits:
-            fprintf('NO vs. ONLY NEIGHBOURS model fits:\n');
-            stats = anovaMixed(T.r_norm,T.sn,'within',[T.model T.roiPlotNum],{'model','roi'},'subset',ismember(T.model,[4,5]));
-            stats.eff.p
-            fprintf('\n----------------------------------------\n');
-            % ttest neighbouring vs. non-neighbouring model fits:
-            fprintf('two-sided paired ttest NO vs. ONLY NEIGHBOURs model fits:\n');
-            for rr=1:6
-                fprintf('ROI %s\n',roiPlotNames{rr});
-                ttest(T.r_norm(T.roiPlotNum==rr & T.model==4),T.r_norm(T.roiPlotNum==rr & T.model==5),2,'paired');
+                ttest(T.r_norm(T.roiPlotNum==rr & T.model==2),T.r_norm(T.roiPlotNum==rr & T.model==4),2,'paired');
                 fprintf('\n')
             end
             fprintf('\n----------------------------------------\n');
@@ -480,7 +550,69 @@ switch what
         ttest(rz,[],1,'onesample');
         
         varargout = {D,r};
-    case 'plot_overlapVsInt'
+    case 'plot_overlapVsIntXY'
+        vararginoptions(varargin,{'model'});
+        glm = 4;
+        sn = 2:11;
+        roi = [1:6];
+        roiPlotNum = [3 4 5 6 1 2 7];
+        regPlotNames = {'4a','4p','3a','3b','1','2'};
+        
+        % load selectivities:
+        D = load(fullfile(dataDir,sprintf('glm%d_selectivity_fthres.mat',glm)));
+        D = getrow(D,ismember(D.sn,sn) & ismember(D.roi,roi));
+        % compute normalized selectivity:
+        Ddata   = getrow(D,D.isEV==0);
+        Drand  = getrow(D,D.isEV==1);
+        Dsparse = getrow(D,D.isEV==2);
+        Ddata.sft_norm = Ddata.sft - Drand.sft;
+        Ddata.sft_norm = Ddata.sft_norm./ (Dsparse.sft - Drand.sft);
+        D=Ddata; clear Tgauss Tsparse Tdata
+        
+        % load model fits:
+        T = load(fullfile(dataDir,sprintf('glm%d_repModelFits.mat',glm)));
+        T = getrow(T,ismember(T.sn,sn) & ismember(T.roi,roi));
+        % calculate normalized pearson's R (0=null, 1=lower noise ceiling)
+        numModels  = numel(unique(T.model));
+        modelNull  = unique(T.model(strcmp(T.modelName,'null')));
+        modelNCeil = unique(T.model(strcmp(T.modelName,'noise ceiling')));
+        modelLinear  = unique(T.model(strcmp(T.modelName,'flexible linear')));
+        T.r_norm = T.r_test - kron(T.r_test(T.model==modelNull),ones(numModels,1)); % null is model 1
+        T.r_norm = T.r_norm./kron(T.r_norm(T.model==modelNCeil),ones(numModels,1)); % lower noise ceiling is model 5
+        % ensure rows match between structures:
+        D=tapply(D,{'roi','sn'},{'sft_norm','mean'});
+        T=tapply(T,{'roi','sn','model'},{'r_norm','mean'});
+        % arrange into plot-friendly structure:
+        linFit = getrow(T,T.model==modelLinear);
+        noiseceilingFit= getrow(T,T.model==modelNCeil);
+        D.intMagnitude = noiseceilingFit.r_norm - linFit.r_norm; %1-fit
+        
+        D.roiPlotNum = roiPlotNum(D.roi)';
+        % plot:
+        sty = style.custom(roiPlotClrs);
+        plt.xy(D.sft_norm,D.intMagnitude,D.roiPlotNum,'split',D.roiPlotNum,'style',sty) % linear model is second model
+        
+        ylabel('1 - fit_{linear}');
+        xlabel('normalized selectivity');
+        title('');
+        %legend(regPlotNames);
+        
+        % correlate selectivities and fits per each region in each
+        % participant:
+        selectivity = pivottable(D.roi,D.sn,D.sft_norm,'mean'); % row is roi, col is subject
+        modelFits   = pivottable(D.roi,D.sn,D.intMagnitude,'mean');
+        r = diag(corr(selectivity,modelFits,'type','Spearman'));
+        % compute mean and sem correlations using fisher z transform:
+        rz = fisherz(r);
+        meanR  = fisherinv(mean(rz));
+        lowerB = fisherinv(mean(rz) - 1.96*stderr(rz));
+        upperB = fisherinv(mean(rz) + 1.96*stderr(rz));
+        fprintf('mean within-participant r=%1.3f [%1.3f - %1.3f]\n',meanR,lowerB,upperB);
+        fprintf('ttest fisher-z Rs > 0:\n');
+        ttest(rz,[],1,'onesample');
+        
+        varargout = {D,r};
+    case 'plot_overlapVsIntScatterplot'
         vararginoptions(varargin,{'model'});
         glm = 4;
         sn = 2:11;
@@ -517,8 +649,8 @@ switch what
         % plot:
         cla;
         %sty = style.custom(plt.helper.get_shades(numel(roi)+1,'hot'));
-        sty = style.custom(roiPlotClrs);
-        plt.xy(D.sft_norm,D.intMagnitude,D.roiPlotNum,'split',D.roiPlotNum,'style',sty) % linear model is second model
+        sty = style.custom(plt.helper.get_shades(numel(sn),'jet'));
+        plt.scatter(D.sft_norm,D.intMagnitude,'split',D.sn,'style',sty) % linear model is second model
         
         ylabel('1 - fit_{linear}');
         xlabel('normalized selectivity');
@@ -529,7 +661,7 @@ switch what
         % participant:
         selectivity = pivottable(D.roi,D.sn,D.sft_norm,'mean'); % row is roi, col is subject
         modelFits   = pivottable(D.roi,D.sn,D.intMagnitude,'mean');
-        r = diag(corr(selectivity,modelFits,'type','Pearson'));
+        r = diag(corr(selectivity,modelFits,'type','Spearman'));
         % compute mean and sem correlations using fisher z transform:
         rz = fisherz(r);
         meanR  = fisherinv(mean(rz));
@@ -572,40 +704,45 @@ switch what
         D=tapply(D,{'roi','sn'},{'sft_norm','mean'});
         T=tapply(T,{'roi','sn','model'},{'r_norm','mean'});
         % arrange into plot-friendly structure:
-        D.modelFit = [];
-        for mm=unique(T.model)'
-            t=getrow(T,T.model==mm);
-            D.modelFit = [D.modelFit,t.r_norm];
-        end
-        selectivity = pivottable(D.roi,D.sn,D.sft_norm,'mean'); % row is roi, col is subject
+        linFit=getrow(T,T.model==2);
+        noiseceilingFit=getrow(T,T.model==8);
+        D.intMagnitude = noiseceilingFit.r_norm - linFit.r_norm; %1-fit
+        
+        interaction = pivottable(D.roi,D.sn,D.intMagnitude,'mean');
         clear T t
         % calculate correlations under each model:
         T = []; t=[];
         v = ones(numel(sn),1);
-        for mm=1:5
+        for mm=1:3
             switch mm
-                case 1 % linear model
-                    modelProfile = pivottable(D.roi,D.sn,D.modelFit(:,2),'mean'); % linear model fit
-                case 2 % flexible gain
-                    modelProfile = pivottable(D.roi,D.sn,D.modelFit(:,7)-D.modelFit(:,2),'mean'); % [flexible - linear model fit]
-                case 3 % interaction gain 
-                    modelProfile = pivottable(D.roi,D.sn,D.modelFit(:,3)-D.modelFit(:,7),'mean'); % [2fint - flexible model fit]
-                case 4 % lower noise ceiling (selectivities)
+                case 1 % selectivity 
+                    modelProfile = pivottable(D.roi,D.sn,D.sft_norm,'mean'); % row is roi, col is subject
+                case 2 % lower noise ceiling (interactions)
                     modelProfile = [];
                     for ii=1:numel(sn)
                         idx = sn~=sn(ii);
-                        modelProfile(:,ii) = mean(selectivity(:,idx),2);
+                        modelProfile(:,ii) = mean(interaction(:,idx),2);
                     end
-                case 5 % upper noise ceiling (selectivities)
-                    modelProfile = mean(selectivity,2)*ones(1,numel(sn));
+                case 3 % upper noise ceiling (interactions)
+                    modelProfile = mean(interaction,2)*ones(1,numel(sn));
             end
-            t.r = diag(corr(selectivity,modelProfile,'type','Pearson'));
+            t.r = diag(corr(interaction,modelProfile,'type','Spearman'));
             t.model = v.*mm;
             t.rois  = v*roi;
             t.sn = sn';
             t.glm   = v.*glm;
             T=addstruct(T,t);
         end
+        
+        
+        % compute mean and sem correlations using fisher z transform:
+        rz = fisherz(T.r(T.model==1));
+        meanR  = fisherinv(mean(rz));
+        lowerB = fisherinv(mean(rz) - 1.96*stderr(rz));
+        upperB = fisherinv(mean(rz) + 1.96*stderr(rz));
+        fprintf('mean within-participant r=%1.3f [%1.3f - %1.3f]\n',meanR,lowerB,upperB);
+        fprintf('ttest fisher-z Rs > 0:\n');
+        ttest(rz,[],1,'onesample');
         
         varargout = {T};
         
@@ -925,6 +1062,311 @@ switch what
         roi = 2; % data from Ba 3b
         glm = 4;
         vararginoptions(varargin,{'roi','sn'});
+        
+        % define which models we are fitting:
+        models = {'null','linear','2finger','3finger','4finger','flexible linear',...
+            '2finger no adjacent','2finger no non-adjacent','noise ceiling'};
+        numModels = numel(models);
+        % get chord matrix
+        chords = pp1_encoding('chords');
+        numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
+        % load subject data (load in once for all subjs to save time):
+        [Y,pV,cV] = pp1_encoding('getData','sn',sn,'roi',roi,'glm',glm);
+        modelG = pp1_encoding('getRegionG','roi',roi,'glm',glm);
+        
+        % loop through subjects and fit each individually:
+        D=[]; % output
+        for s=1:numel(sn)
+            fprintf('S%02d\n',s);
+            % split data into partitions (for estimation of patterns under each model)
+            % assign runs to each partition
+            part = unique(pV{s});
+            numPart = numel(part);
+            partI = {};
+            for ip=1:numPart
+                partI{ip}=part(ip);
+            end  
+            % allocate space for predicted patterns, evaluation metrics:
+            numVox = size(Y{s},2);
+            G_pred = zeros(31,31,numModels);
+            Y_avg = nan([numModels,5,numPart]); % avg. activity per # digits
+            modelTheta = {};
+            SS1 = zeros(numPart,numModels);
+            SS2 = SS1; SSC = SS1; SS1t = SS1; SS2t = SS1; SSCt = SS1; 
+            RSS = SS1; TSS=SS1; RSSt=SS1; TSSt=SS1;
+            % loop through partitions and estimate patterns
+            for ii=1:numel(partI)
+                % estimate the true condition activity patterns using
+                % training data:
+                trainIdx = ~ismember(pV{s},partI{ii}); 
+                testIdx  = ismember(pV{s},partI{ii}); 
+                Ytest    = Y{s}(testIdx,:);
+                [Utrain,lambda0, thetaReg0] = pp1_encoding('estU_tikhonov',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            
+                % predict patterns under each model:
+                for mm=1:numModels
+                    modelName = models{mm};
+                    fprintf('Subj: %02d  |  CVFold: %d  |  Model: %s\n',s,ii,modelName); 
+                    switch modelName
+                        case 'null'
+                            % model scaling of mean activity, independent
+                            % of finger
+                            Ypred = pp1_encoding('predictModelPatterns',Utrain,'null',[]);
+                            thetaReg = thetaReg0;
+                            lambdaReg = lambda0;
+                            thetaEst = nan(1,4);  
+                        case 'linear'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case '2finger'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case '3finger'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov3F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'3dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case '4finger'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov4F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'4dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case 'flexible linear'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            
+                            theta0 = [log(0.9) log(0.8) log(0.7) log(0.6)];
+                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible_noIntercept'); % minimize pattern RSS in parameter fitting
+                            [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
+                                                        
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_noIntercept',thetaEst);
+                            
+%                             thetaScale = pp1_encoding('est_FlexibleParams',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+%                             Ypred2 = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_noIntercept',thetaScale);
+%                             avg1 = mean(numD_inv*Ypred,2)'; % avg. activity per # digits
+%                             avg2 = mean(numD_inv*Ypred2,2)'; % avg. activity per # digits
+                        case '2finger no adjacent'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F_noNeighbours',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta_nn',[]);
+                            thetaEst = nan(1,4);
+                        case '2finger no non-adjacent' % (i.e. only neighbours)
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F_onlyNeighbours',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta_on',[]);
+                            thetaEst = nan(1,4);   
+                        case 'noise ceiling'
+                            Ypred = Utrain;
+                            thetaReg = thetaReg0;
+                            lambdaReg = lambda0;
+                            thetaEst = nan(1,4);      
+                        otherwise
+                            error('no model named: %s',modelName)
+                    end
+                    modNames{mm,1} = modelName;
+
+                    G = Ypred*Ypred'./ numVox;
+                    G_pred(:,:,mm) = G_pred(:,:,mm) + G;
+                    modelTheta{mm}(ii,:) = thetaEst;
+                    regTheta{mm}(ii,:)   = thetaReg;
+                    regLambda(mm,ii)     = lambdaReg;
+                    Y_avg_cent(mm,:,ii)  = mean(numD_inv*(Ypred-mean(Ypred,1)),2)'; % avg. activity per # digits
+                    Y_avg(mm,:,ii)       = mean(numD_inv*Ypred,2)'; % avg. activity per # digits
+                    % calculate metrics for R and R2 of prediction against TRAINING
+                    % data:
+                    [SS1t(ii,mm),SS2t(ii,mm),SSCt(ii,mm),RSSt(ii,mm),TSSt(ii,mm)] = pp1_encoding('evaluate',Ypred,Utrain); % corr b/t pred and train patterns
+                    % calculate metrics for R and R2 of prediction against TEST data:
+                    [SS1(ii,mm), SS2(ii,mm), SSC(ii,mm), RSS(ii,mm), TSS(ii,mm)] = pp1_encoding('evaluate',Ypred,Ytest); % corr b/t pred and test patterns
+                end
+            end
+            G_pred = G_pred./numel(partI); % avg. model predicted Gs across folds
+            d = [];
+            % for each model, avg. thetas across folds:
+            d.modelName  = modNames;
+            d.modelTheta = cell2mat(cellfun(@(x) mean(x,1),modelTheta,'uni',0)');
+            d.regTheta   = cellfun(@(x) mean(x,1),regTheta,'uni',0)';
+            d.regLambda  = nanmean(regLambda,2);
+            % pearson R:
+            d.r_train = [mean(SSCt./sqrt(SS1t.*SS2t))]';
+            d.r_test  = [mean(SSC./sqrt(SS1.*SS2))]';
+            % R2:
+            d.r2_train = [1-sum(RSSt)./sum(TSSt)]';
+            d.r2_test  = [1-sum(RSS)./sum(TSS)]';
+            % arrange data into output structure:
+            v = ones(numModels,1);
+            d.avgAct= mean(Y_avg,3); % avg. activity per # digits
+            d.avgAct_cent= mean(Y_avg_cent,3); % avg. activity per # digits
+            for mm=1:numModels
+                d.gpred(mm,:) = rsa_vectorizeIPM(G_pred(:,:,mm));
+            end
+            d.model = [1:numModels]';
+            d.roi   = v.*roi;
+            d.sn    = v.*sn(s);
+            
+            D=addstruct(D,d);
+
+        end % for each subject
+        
+        varargout = {D};
+    case 'encoding_Passive_tessels'
+        % case to fit models to participant data
+        Y = varargin{1};
+        pV = varargin{2};
+        cV = varargin{3};
+        tesselG = varargin{4};
+        tesselNum = varargin{5};
+
+        
+        % define which models we are fitting:
+        models = {'null','linear','2finger','3finger','4finger','flexible linear',...
+            '2finger no adjacent','2finger no non-adjacent','noise ceiling'};
+        numModels = numel(models);
+        % get chord matrix
+        chords = pp1_encoding('chords');
+        numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
+        
+        % loop through tessels and fit each individually:
+        D=[]; % output
+        for s=1:numel(Y)
+            qq = tesselNum(s);
+            fprintf('\ntessel # %d',qq);
+            if isempty(Y{s})
+                fprintf('\n********** NO DATA **********');
+                continue % few participants don't have coverage in all tessels (rare)
+            end
+            % define model G:
+            modelG = rsa_squareIPM(tesselG.g(tesselG.roi==qq,:));
+            % split data into partitions (for estimation of patterns under each model)
+            % assign runs to each partition
+            part = unique(pV{s});
+            numPart = numel(part);
+            partI = {};
+            for ip=1:numPart
+                partI{ip}=part(ip);
+            end  
+            % allocate space for predicted patterns, evaluation metrics:
+            numVox = size(Y{s},2);
+            G_pred = zeros(31,31,numModels);
+            Y_avg = nan([numModels,5,numPart]); % avg. activity per # digits
+            modelTheta = {};
+            SS1 = zeros(numPart,numModels);
+            SS2 = SS1; SSC = SS1; SS1t = SS1; SS2t = SS1; SSCt = SS1; 
+            RSS = SS1; TSS=SS1; RSSt=SS1; TSSt=SS1;
+            % loop through partitions and estimate patterns
+            for ii=1:numel(partI)
+                % estimate the true condition activity patterns using
+                % training data:
+                trainIdx = ~ismember(pV{s},partI{ii}); 
+                testIdx  = ismember(pV{s},partI{ii}); 
+                Ytest    = Y{s}(testIdx,:);
+                [Utrain,lambda0, thetaReg0] = pp1_encoding('estU_tikhonov',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            
+                % predict patterns under each model:
+                for mm=1:numModels
+                    modelName = models{mm};
+                    fprintf('Tessel: %02d  |  CVFold: %d  |  Model: %s\n',qq,ii,modelName); 
+                    switch modelName
+                        case 'null'
+                            % model scaling of mean activity, independent
+                            % of finger
+                            Ypred = pp1_encoding('predictModelPatterns',Utrain,'null',[]);
+                            thetaReg = thetaReg0;
+                            lambdaReg = lambda0;
+                            thetaEst = nan(1,4);  
+                        case 'linear'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case '2finger'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case '3finger'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov3F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'3dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case '4finger'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov4F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'4dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case 'flexible linear'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            
+                            theta0 = [log(0.9) log(0.8) log(0.7) log(0.6)];
+                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible_noIntercept'); % minimize pattern RSS in parameter fitting
+                            [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
+                                                        
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_noIntercept',thetaEst);
+                            
+%                             thetaScale = pp1_encoding('est_FlexibleParams',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+%                             Ypred2 = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_noIntercept',thetaScale);
+%                             avg1 = mean(numD_inv*Ypred,2)'; % avg. activity per # digits
+%                             avg2 = mean(numD_inv*Ypred2,2)'; % avg. activity per # digits
+                        case '2finger no adjacent'
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F_noNeighbours',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta_nn',[]);
+                            thetaEst = nan(1,4);
+                        case '2finger no non-adjacent' % (i.e. only neighbours)
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F_onlyNeighbours',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta_on',[]);
+                            thetaEst = nan(1,4);   
+                        case 'noise ceiling'
+                            Ypred = Utrain;
+                            thetaReg = thetaReg0;
+                            lambdaReg = lambda0;
+                            thetaEst = nan(1,4);      
+                        otherwise
+                            error('no model named: %s',modelName)
+                    end
+                    modNames{mm,1} = modelName;
+
+                    G = Ypred*Ypred'./ numVox;
+                    G_pred(:,:,mm) = G_pred(:,:,mm) + G;
+                    modelTheta{mm}(ii,:) = thetaEst;
+                    regTheta{mm}(ii,:)   = thetaReg;
+                    regLambda(mm,ii)     = lambdaReg;
+                    Y_avg_cent(mm,:,ii)  = mean(numD_inv*(Ypred-mean(Ypred,1)),2)'; % avg. activity per # digits
+                    Y_avg(mm,:,ii)       = mean(numD_inv*Ypred,2)'; % avg. activity per # digits
+                    % calculate metrics for R and R2 of prediction against TRAINING
+                    % data:
+                    [SS1t(ii,mm),SS2t(ii,mm),SSCt(ii,mm),RSSt(ii,mm),TSSt(ii,mm)] = pp1_encoding('evaluate',Ypred,Utrain); % corr b/t pred and train patterns
+                    % calculate metrics for R and R2 of prediction against TEST data:
+                    [SS1(ii,mm), SS2(ii,mm), SSC(ii,mm), RSS(ii,mm), TSS(ii,mm)] = pp1_encoding('evaluate',Ypred,Ytest); % corr b/t pred and test patterns
+                end
+            end
+            G_pred = G_pred./numel(partI); % avg. model predicted Gs across folds
+            d = [];
+            % for each model, avg. thetas across folds:
+            d.modelName  = modNames;
+            d.modelTheta = cell2mat(cellfun(@(x) mean(x,1),modelTheta,'uni',0)');
+            d.regTheta   = cellfun(@(x) mean(x,1),regTheta,'uni',0)';
+            d.regLambda  = nanmean(regLambda,2);
+            % pearson R:
+            d.r_train = [mean(SSCt./sqrt(SS1t.*SS2t))]';
+            d.r_test  = [mean(SSC./sqrt(SS1.*SS2))]';
+            % R2:
+            d.r2_train = [1-sum(RSSt)./sum(TSSt)]';
+            d.r2_test  = [1-sum(RSS)./sum(TSS)]';
+            % arrange data into output structure:
+            v = ones(numModels,1);
+            d.avgAct= mean(Y_avg,3); % avg. activity per # digits
+            d.avgAct_cent= mean(Y_avg_cent,3); % avg. activity per # digits
+            for mm=1:numModels
+                d.gpred(mm,:) = rsa_vectorizeIPM(G_pred(:,:,mm));
+            end
+            d.model = [1:numModels]';
+            d.tessel= v.*qq;
+            
+            D=addstruct(D,d);
+
+        end % for each subject
+        
+        varargout = {D};
+    
+    
+    case 'encoding_Passive_withBaseline'
+        % case to fit models to participant data
+        sn  = [2:11]; % subj 1 is excluded from analyses (no fieldmaps)
+        roi = 2; % data from Ba 3b
+        glm = 4;
+        vararginoptions(varargin,{'roi','sn'});
         numModels = 8;
         chords = pp1_encoding('chords');
         numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
@@ -1082,13 +1524,13 @@ switch what
         end % for each subject
         
         varargout = {D};
-    case 'encoding_Passive_neighbours'
+    case 'encoding_Passive_testBaseline'
         % case to fit models to participant data
         sn  = [2:11]; % subj 1 is excluded from analyses (no fieldmaps)
         roi = 2; % data from Ba 3b
         glm = 4;
         vararginoptions(varargin,{'roi','sn'});
-        numModels = 7;
+        numModels = 12;
         chords = pp1_encoding('chords');
         numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
         % load subject data (load in once for all subjs to save time):
@@ -1156,35 +1598,61 @@ switch what
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
                             Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_ns',thetaEst);
                             thetaEst = [thetaEst nan nan nan nan];
-                        case 4 % 2-finger pairs, no neighbours
-                            modelName = '2finger no neighbours';
-                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F_noNeighbours',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                        case 4 % 3rd order polynomial (3-finger interactions)
+                            modelName = '3finger';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov3F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
                                                         
                             theta0 = [thetaBaseline];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'2dInt_ns_nn'); % minimize pattern RSS in parameter fitting
+                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'3dInt_ns'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_ns_nn',thetaEst);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'3dInt_ns',thetaEst);
                             thetaEst = [thetaEst nan nan nan nan];
-                        case 5 % 2-finger pairs, only neighbours
-                            modelName = '2finger only neighbours';
-                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F_onlyNeighbours',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                        case 5 % 4th order polynomial (4-finger interactions)
+                            modelName = '4finger';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov4F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
                                                         
                             theta0 = [thetaBaseline];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'2dInt_ns_on'); % minimize pattern RSS in parameter fitting
+                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'4dInt_ns'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_ns_on',thetaEst);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'4dInt_ns',thetaEst);
                             thetaEst = [thetaEst nan nan nan nan];
-             
-                        case 6 % flexible summation model
-                            modelName = 'flexible';
+                        case 6 % 5th order polynomial (5-finger interactions, saturated model)
+                            modelName = '5finger';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov5F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                                                        
+                            theta0 = [thetaBaseline];
+                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'5dInt_ns'); % minimize pattern RSS in parameter fitting
+                            [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'5dInt_ns',thetaEst);
+                            thetaEst = [thetaEst nan nan nan nan];
+                        
+                        case 7 % linear summation model - no baseline param
+                            modelName = 'linear noTheta';
                             [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_notheta',[]);
+                            thetaEst = nan(1,5);
+                        case 8 % 2nd order polynomial (2-finger interactions) - no baseline param
+                            modelName = '2finger noTheta';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta',[]);
+                            thetaEst = nan(1,5);
+                        case 9 % 3rd order polynomial (3-finger interactions) - no baseline param
+                            modelName = '3finger noTheta';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov3F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'3dInt_notheta',[]);
+                            thetaEst = nan(1,5);
+                        case 10 % 4th order polynomial (4-finger interactions) - no baseline param
+                            modelName = '4finger noTheta';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov4F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'4dInt_notheta',[]);
+                            thetaEst = nan(1,5);
+                        case 11 % 5th order polynomial (5-finger interactions, saturated model) - no baseline param
+                            modelName = '5finger noTheta';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov5F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'5dInt_notheta',[]);
+                            thetaEst = nan(1,5);
                             
-                            theta0 = [thetaBaseline log(1/2) log(1/3) log(1/4) log(1/5)];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible_ns'); % minimize pattern RSS in parameter fitting
-                            [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_ns',thetaEst);
-                            thetaEst = [thetaEst(1) exp(thetaEst(2:5))];
-                        case 7 % lower noise ceiling
+                        case 12 % lower noise ceiling
                             modelName = 'noise ceiling';
                             Ypred = Utrain;
                             thetaReg = thetaReg0;
@@ -1243,7 +1711,7 @@ switch what
         roi = 2; % data from Ba 3b
         glm = 4;
         vararginoptions(varargin,{'roi','sn'});
-        numModels = 7;
+        numModels = 8;
         chords = pp1_encoding('chords');
         numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
         % load subject data (load in once for all subjs to save time):
@@ -1283,6 +1751,8 @@ switch what
                 
                 Fs0 = tapply(F,{'chordNum'},{'forceN','mean(x,1)'},'subset',F.sn==sn(s) & ~ismember(F.run,partI{ii}));
                 Zs0 = Fs0.forceN;
+                Ftest = tapply(F,{'chordNum'},{'forceN','mean(x,1)'},'subset',F.sn==sn(s) & ismember(F.run,partI{ii}));
+                Ztest = Ftest.forceN;
                 
                 % predict patterns under each model:
                 for mm=1:numModels
@@ -1295,62 +1765,52 @@ switch what
                             Ypred = pp1_encoding('predictModelPatterns',Utrain,'null',[]);
                             thetaReg = thetaReg0;
                             lambdaReg = lambda0;
-                            thetaEst = [nan nan nan nan nan];
+                            thetaEst = nan(1,4);
                             
-                        case 2 % linear summation model
-                            modelName = 'linear';
+                        case 2 % linear summation model (Xchord)
                             [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
-                             
-                            theta0 = [0];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_ns'); % minimize pattern RSS in parameter fitting
-                            [thetaEst,feval,ef,fitInfo] = fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_ns',thetaEst);
-                            thetaBaseline = thetaEst(1);
-                            thetaEst = [thetaEst nan nan nan nan];
-                        case 3 % flexible summation model
-                            modelName = 'flexible';
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case 3 % flexible summation model (Xchord)
                             [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
                             
-                            theta0 = [thetaBaseline log(1/2) log(1/3) log(1/4) log(1/5)];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible_ns'); % minimize pattern RSS in parameter fitting
+                            theta0 = [log(0.9) log(0.8) log(0.7) log(0.6)];
+                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible_noIntercept'); % minimize pattern RSS in parameter fitting
                             [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_ns',thetaEst);
-                            thetaEst = [thetaEst(1) exp(thetaEst(2:5))];
-                        case 4 % linear force model
-                            modelName = 'linear force';
-                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSFforce',Y{s}(trainIdx,:),pV{s}(trainIdx),Zs(trainIdx,:),Zs0,modelG);
-                             
-                            theta0 = [0];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_ns'); % minimize pattern RSS in parameter fitting
-                            [thetaEst,feval,ef,fitInfo] = fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_ns',thetaEst);
-                            thetaBaseline = thetaEst(1);
-                            thetaEst = [thetaEst nan nan nan nan];
-                        case 5 % flexible force model
-                            modelName = 'flexible force';
-                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSFforce',Y{s}(trainIdx,:),pV{s}(trainIdx),Zs(trainIdx,:),Zs0,modelG);
-                            
-                            theta0 = [thetaBaseline log(1/2) log(1/3) log(1/4) log(1/5)];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'summation_flexible_ns'); % minimize pattern RSS in parameter fitting
-                            [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_ns',thetaEst);
-                            thetaEst = [thetaEst(1) exp(thetaEst(2:5))];
-                        
-                        case 6 % 2nd order polynomial (2-finger interactions)
-                            modelName = '2finger';
-                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
                                                         
-                            theta0 = [thetaBaseline];
-                            thetaFcn = @(x) modelLossRSS(x,Uf,Utrain,'2dInt_ns'); % minimize pattern RSS in parameter fitting
-                            [thetaEst,feval,ef,fitInfo]= fminsearch(thetaFcn, theta0, optimset('MaxIter',50000));
-                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_ns',thetaEst);
-                            thetaEst = [thetaEst nan nan nan nan];
-                        case 7 % lower noise ceiling
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_flexible_noIntercept',thetaEst);
+                            
+                        case 4 % linear force model (Xchord)
+                            modelName = 'linear (force model matrix)';
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSFforce',Y{s}(trainIdx,:),pV{s}(trainIdx),Zs(trainIdx,:),Zs0,modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case 5 % linear force model 2 (Xchord)
+                            modelName = 'linear (force model matrix 2)';
+                            Zm0 = Zs0;
+                            Zm0(chords==0) = 0;
+                            Zm = Zs(trainIdx,:);
+                            Zm(pcm_indicatorMatrix('identity',cV{s}(trainIdx))*chords==0) = 0;
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSFforce',Y{s}(trainIdx,:),pV{s}(trainIdx),Zm,Zm0,modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case 6 % linear force model 2 (Xchord)
+                            modelName = 'linear (force model matrix 2)';
+                            Zp = Ztest;
+                            Zp(chords==0) = 0;
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonovSF',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'summation_X0_notheta',[],Zp);
+                            thetaEst = nan(1,4);
+                        case 7 % 2nd order polynomial (2-finger interactions)
+                            [Uf,lambdaReg,thetaReg] = pp1_encoding('estU_tikhonov2F',Y{s}(trainIdx,:),pV{s}(trainIdx),cV{s}(trainIdx),modelG);
+                            Ypred = pp1_encoding('predictModelPatterns',Uf,'2dInt_notheta',[]);
+                            thetaEst = nan(1,4);
+                        case 8 % lower noise ceiling
                             modelName = 'noise ceiling';
                             Ypred = Utrain;
                             thetaReg = thetaReg0;
                             lambdaReg = lambda0;
-                            thetaEst = [nan nan nan nan nan];      
+                            thetaEst = nan(1,4);      
                     end
                     modNames{mm,1} = modelName;
 
@@ -1397,7 +1857,7 @@ switch what
         end % for each subject
         
         varargout = {D};
-    case 'encoding_Passive_tessels'
+    case 'encoding_Passive_tessels_backup'
         % case to fit models to participant data
         Y = varargin{1};
         pV = varargin{2};
@@ -1405,8 +1865,8 @@ switch what
         tesselG = varargin{4};
         tesselNum = varargin{5};
 
-        
         numModels = 8;
+        % get chord matrix
         chords = pp1_encoding('chords');
         numD_inv = pinv(indicatorMatrix('identity',sum(chords,2)));
         
@@ -1737,7 +2197,7 @@ switch what
         model = varargin{2};
         theta = varargin{3}; % theta(1) = baseline, theta(2:end) = model params
         if numel(varargin)==4
-            subjNum=varargin{4};
+            X0=varargin{4};
         end
         
         switch model
@@ -1815,6 +2275,7 @@ switch what
                 X4 = pp1_encoding('chord_quads');
                 X  = [X1 X2 X3 X4 [zeros(30,1);1]];
                 Ymf_hat = theta(2) * (X*(Ysf-theta(1)) + theta(1)); 
+            
             case '0' % models below do not have a scalar parameter, only baseline parameter
             case 'summation_ns'
                 % theta(1) = baseline
@@ -1870,7 +2331,66 @@ switch what
                 X2 = pp1_encoding('chord_pairs_onlyNeighbours');
                 X  = [X1 X2];
                 Ymf_hat = X*(Ysf-theta(1)) + theta(1); 
+            case 'summation_X0_ns'
+                % theta(1) = baseline
+                Ymf_hat = X0*(Ysf-theta(1)) + theta(1);
+            
+            case '0' % models below do not have a scalar or baseline parameters
+            case 'summation_notheta'
+                % get multi-finger design:
+                X = pp1_encoding('chords');
+                Ymf_hat = X*Ysf;
+            case 'summation_flexible_noIntercept'
+                % theta(1:4) = finger combination param (per # fingers in
+                % chords for 2:5 digits)
                 
+                X = pp1_encoding('chords');
+                numD = sum(X,2);
+                X = X.*[ones(1,5) exp(theta(numD(numD>1)-1))]'; % flexible scaling per # fingers stimulated (force positive values with exp)
+                Ymf_hat = X*Ysf; 
+            case '2dInt_notheta' % linear summation and paired interactions
+                % model that includes 2-finger interaction components
+                
+                X1 = pp1_encoding('chords');
+                X2 = pp1_encoding('chord_pairs');
+                X  = [X1 X2];
+                Ymf_hat = X*Ysf; 
+            case '3dInt_notheta' % linear summation and paired interactions
+                % model that includes 2-finger interaction components
+                
+                X1 = pp1_encoding('chords');
+                X2 = pp1_encoding('chord_pairs');
+                X3 = pp1_encoding('chord_triplets');
+                X  = [X1 X2 X3];
+                Ymf_hat = X*Ysf; 
+            case '4dInt_notheta'
+                X1 = pp1_encoding('chords');
+                X2 = pp1_encoding('chord_pairs');
+                X3 = pp1_encoding('chord_triplets');
+                X4 = pp1_encoding('chord_quads');
+                X  = [X1 X2 X3 X4];
+                Ymf_hat = X*Ysf; 
+            case '5dInt_notheta'
+                X1 = pp1_encoding('chords');
+                X2 = pp1_encoding('chord_pairs');
+                X3 = pp1_encoding('chord_triplets');
+                X4 = pp1_encoding('chord_quads');
+                X  = [X1 X2 X3 X4 [zeros(30,1);1]];
+                Ymf_hat =X*Ysf; 
+            case '2dInt_notheta_nn' % linear summation and paired interactions, no immediately neighbouring pairs
+                X1 = pp1_encoding('chords');
+                X2 = pp1_encoding('chord_pairs_noNeighbours');
+                X  = [X1 X2];
+                Ymf_hat = X*Ysf; 
+            case '2dInt_notheta_on' % linear summation and paired interactions, only immediately neighbouring pairs
+                X1 = pp1_encoding('chords');
+                X2 = pp1_encoding('chord_pairs_onlyNeighbours');
+                X  = [X1 X2];
+                Ymf_hat = X*Ysf;                 
+            case 'summation_X0_notheta'
+                % theta(1) = baseline
+                Ymf_hat = X0*Ysf;
+            
         end
         varargout = {Ymf_hat};
     case 'estU_ols' % estimate Us using ols
@@ -1943,7 +2463,7 @@ switch what
         M{1}.Gc = pinv(Z0)*G*pinv(Z0)';
         M{1}.numGparams = 1;
         % fit model G to get noise and signal params:
-        [~,theta_hat] = pcm_fitModelIndivid({Y},M,pV,Zsf,'runEffect','none','verbose',0,'fitScale',0);
+        [~,theta_hat,~,tt] = pcm_fitModelIndivid({Y},M,pV,Zsf,'runEffect','none','verbose',0,'fitScale',0);
         % reconstruct true patterns using regularized regression:
         Usf = pcm_estimateU(M{1},theta_hat{1},Y,Zsf,[]);
 
@@ -2076,7 +2596,40 @@ switch what
         lambda = exp(theta_hat{1}(2))/exp(theta_hat{1}(1)); %lambda is noise/scale
         
         varargout = {U,lambda,theta_hat{1}};    
+    case 'est_FlexibleParams' 
+        % Ridge regression estimate of patterns
+        % - use pcm with fixed model G to estimate signal and noise
+        % parameters
+        % - employ ridge regression with lambda = noise param / signal
+        % param
+
+        % inputs
+        Y   = varargin{1}; % matrix of activity patterns [#conds*#runs x #vox]
+        pV  = varargin{2}; % partition vector (assume cV and pV are same across subjs)
+        cV  = varargin{3}; % condition vector (chord #s)
+        G   = varargin{4}; % model prior
+        
+        % create single finger feature matrix
+        Z0  = pp1_encoding('chords');
+        Gm  = pinv(Z0)*G*pinv(Z0)';
+        Zsf = kron(ones(numel(unique(pV)),1),Z0);
+        
+        % pcm non-linear model structure
+        M{1}.type = 'nonlinear';
+        M{1}.numGparams = 4;
+        M{1}.theta0     = log([0.9 0.8 0.7 0.6])';
+        M{1}.Ac         = pcm_diagonalize(Gm); 
+        M{1}.modelpred  = @pcmSubj_modelpred_flexible;
+               
+        % fit model G to get noise and signal params:
+        [~,theta_hat,~,tt] = pcm_fitModelIndivid({Y},M,pV,cV,'runEffect','none','verbose',0,'fitScale',1);
+        
+        % get scale parameters:
+        scaleParam = theta_hat{1}(1:4)'; % scaling relative to single fingers
+        
+        varargout = {scaleParam};    
     
+        
     case 'estU_tikhonov2F_noNeighbours' 
         % Ridge regression estimate of patterns
         % - use pcm with fixed model G to estimate signal and noise
@@ -2494,7 +3047,7 @@ switch what
         % participants from roi):
         sn  = 2:11;
         glm = 4;
-        roi = [1:9,12,15:21];
+        roi = [1:9,12,15:21,29:30];
         D =[];
         for rr=roi
             G_pd = [];
@@ -2520,7 +3073,8 @@ switch what
             d.g=rsa_vectorizeIPM(G_pd);
             D=addstruct(D,d);
         end   
-        save(fullfile(dataDir,sprintf('glm%d_regionG.mat',glm)),'-struct','D');   
+       % save(fullfile(dataDir,sprintf('glm%d_regionG.mat',glm)),'-struct','D');   
+       varargout = {D};
     case 'makeRegionG_subj'
         % Estimate Region G (G is avg. semi-positive definite crossval G across
         % participants from roi):
@@ -2594,7 +3148,7 @@ switch what
         % Estimate pattern dissimilarities
         sn  = 2:11;
         glm = 4;
-        roi = [1:7,15:21];
+        roi = [29,30];%[1:7,15:21,29,30];
 
         D =[];
         for rr=roi
@@ -2638,7 +3192,7 @@ switch what
                 D=addstruct(D,d);
             end
         end   
-      %  save(fullfile(dataDir,sprintf('glm%d_dissimilarities.mat',glm)),'-struct','D');   
+      %  save(fullfile(dataDir,sprintf('glm%d_distances.mat',glm)),'-struct','D');   
         varargout = {D};
     case 'getDists'
         glm=[];
@@ -3159,7 +3713,7 @@ switch what
         sty = style.custom(plt.helper.get_shades(6,'hot'));
         plt.line(D.signal,D.r_norm,'split',D.model,'style',sty);
         
-        save('/Users/sarbuckle/Dropbox (Diedrichsenlab)/passivePatterns_paper/pp1_encodingAnalyses/data/modelFitStability_simulations.mat','-struct','D')
+        %save(dataDir,'modelFitStability_simulations.mat','-struct','D')
         %keyboard
         varargout = {D};
     case 'simulate_flex'
@@ -4366,7 +4920,8 @@ switch what
                 partI{ip}=part(ip);
             end
 
-            % do regularization with gridded lambda values
+            % do regularization with gridded lambda values (31 conditions
+            % full G matrix)
             SS1=[]; SS2=[]; SSC=[]; RSS=[]; TSS=[];
             for jj=1:numel(lambdaGrid) 
                 for ii=1:numel(partI)
@@ -4417,6 +4972,103 @@ switch what
         end
         
         varargout = {D};
+    
+    case 'test_final'  
+        % simulate data under specified model
+        % test cv fits of all models
+        signal = [0.1:0.1:1];
+        noise  = 1;
+        
+        % fit representational encoding models to data from BA regions
+        numSim = 10; % # simulated subjects
+        model  = '4finger'; % linear, 2finger, 3finger, 4finger
+        modelNum = 5;
+        D = []; % output structure
+        for ss=signal
+            % load subject data (load in once for all subjs to save time):
+            [Y,pV,cV] = pp1_encoding('simulatePatterns',ss,noise,model,numSim);
+            Gm        = pp1_ana('region:loadG','roi',4,'glm',4);
+            d         = pp1_ana('model:fitModels',Y,pV,cV,Gm,'models',{'null','linear','2finger','3finger','4finger','noiseCeiling'});
+            % add indexing fields to datastructure:
+            v  = ones(size(d.dataset));
+            d.trueModel = v.*modelNum;
+            Cs = pcm_indicatorMatrix('identity',d.dataset);
+            d  = rmfield(d,{'dataset'});
+            d.simNum = Cs*[1:numSim]';
+            
+            d.signal = ones(size(d.simNum)).*ss;
+            d.noise  = ones(size(d.simNum)).*noise;
+            
+            d.r_norm = d.r_test - kron(d.r_test(d.model==1),ones(6,1));
+            d.r_norm = d.r_norm./kron(d.r_norm(d.model==6),ones(6,1));
+            
+            D=addstruct(D,d);
+        end
+
+        varargout = {D};
+    case 'simulatePatterns'
+        signal = varargin{1};
+        noise  = varargin{2};
+        model  = varargin{3};
+        numSim = varargin{4};
+        numVox = 500;
+        numRun = 10;
+        numCond= 31;
+        
+        % define model prior:
+        G = pp1_ana('region:loadG','roi',4,'glm',4); % use group G from BA2
+        switch model
+            case 'singleFinger'
+                % create single finger feature matrix
+                Z0 = pp1_ana('misc:chords');
+                Gprior = pinv(Z0)*G*pinv(Z0)';
+                Z  = kron(ones(numRun,1),Z0); % feature design matrix for activity patterns
+            case '2finger'
+                % create 2finger feature matrix
+                c1 = pp1_ana('misc:chords'); % single finger features
+                c2 = pp1_ana('misc:chord_pairs'); % finger pair features
+                Z0 = [c1 c2];
+                Gprior = pinv(Z0)*G*pinv(Z0)';
+                Z = kron(ones(numRun,1),Z0); % feature design matrix for activity patterns  
+            case '3finger'
+                % create 3finger feature matrix
+                c1 = pp1_ana('misc:chords'); % single finger features
+                c2 = pp1_ana('misc:chord_pairs'); % finger pair features
+                c3 = pp1_ana('misc:chord_triplets'); % finger triplet features
+                Z0 = [c1 c2 c3];
+                Gprior = pinv(Z0)*G*pinv(Z0)';
+                Z = kron(ones(numRun,1),Z0); % feature design matrix for activity patterns
+            case '4finger'
+                % create 4finger feature matrix
+                c1 = pp1_ana('misc:chords'); % single finger features
+                c2 = pp1_ana('misc:chord_pairs'); % finger pair features
+                c3 = pp1_ana('misc:chord_triplets'); % finger triplet features
+                c4 = pp1_ana('misc:chord_quads'); % etc...
+                Z0 = [c1 c2 c3 c4];
+                Gprior = pinv(Z0)*G*pinv(Z0)';
+                Z = kron(ones(numRun,1),Z0); % feature design matrix for activity patterns
+            otherwise
+                error('no feature model of this type')
+        end
+        
+        
+        % define PCM model:
+        M{1}.type       = 'component';
+        M{1}.numGparams = 1;
+        M{1}.Gc         = Gprior; 
+        
+       % simulate data:
+        %Z = kron(ones(numRun,1),eye(numCond));
+        Y = pcm_makeDataset(M{1},1,'design',Z,'signal',signal,'noise',noise,...
+            'numVox',numVox,'numSim',numSim);
+        % get indicator vectors
+        for ii=1:numSim
+            cV{ii} = kron(ones(numRun,1),[1:numCond]');
+            pV{ii} = kron([1:numRun]',ones(numCond,1));
+        end
+
+        varargout = {Y,pV,cV};
+        
         
     case 'simulate_sf'
         % simulate chord data from model that only has single finger
@@ -4682,6 +5334,39 @@ Ytrain = Ytrain-mean(Ytrain,1);
 rss   = sum(sum((Ytrain-Ypred).^2)); % calculate L2 loss (RSS)
 end
 
+function rss = modelLossRSS_X0(theta,Ysf_train,Ytrain,modelName,X0)
+Ypred = pp1_encoding('predictModelPatterns',Ysf_train,modelName,theta,X0); % predict patterns under perscribed model
+Ypred = Ypred-mean(Ypred,1); % rmv voxel means
+Ytrain = Ytrain-mean(Ytrain,1);
+rss   = sum(sum((Ytrain-Ypred).^2)); % calculate L2 loss (RSS)
+end
+
+function [G,dGdtheta] = pcmSubj_modelpred_flexible(theta,Model)
+% Predicts G-matrix from the 4 parameters of the simple
+% scaling model and returns the derivative in respect to the parameters
+% Finger params are hardcoded based on perscription (so change accordingly)
+% Harvest appropriate params
+scaleParams = exp(theta(1:4));
+% single finger features
+A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger from group)
+OM = A*A';
+% activity scaling feature
+chords     = pp1_encoding('chords');
+M          = chords;
+numFingers = sum(M,2);
+for i = 1:4
+    M(numFingers==i+1,:) = M(numFingers==i+1,:).*scaleParams(i);
+end         
+G  = M*OM*M';  % Second moment matrix
+
+for i = 1:4 % scale params
+    dM                    = zeros(size(chords));
+    dM(numFingers==i+1,:) = chords(numFingers==i+1,:);
+    dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
+    dGdtheta(:,:,i)       = dGdtheta(:,:,i)*scaleParams(i); % scaled derivative 
+end
+end
+
 
 function [G,dGdtheta] = pcmGroup_modelpred_flexible(theta,Model)
 % Predicts G-matrix from the 4 parameters of the simple
@@ -4739,222 +5424,227 @@ for i = 1:4 % scale params
 end
 end
 
-function [G,dGdtheta] = pcmGroup_modelpred_superFlex(theta,Model)
-% Predicts G-matrix from the 4 parameters of the simple
-% scaling model and returns the derivative in respect to the parameters
-% Finger params are hardcoded based on perscription (so change accordingly)
-% Harvest appropriate params
-digitParams = exp(theta(1:20));
-% single finger features
-A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
-OM = A*A';
-% G = A*A'; 
-% [V,lam_G] = eig(full(G));
-% dS    = diag(lam_G);
-% idx   = dS>eps;
-% OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)';
-% activity scaling feature
-chords     = pp1_encoding('chords');
-X0         = chords;
-numFingers = sum(X0,2);
-theta_didx = {[1:4],[5:8],[9:12],[13:16],[17:20]};
-M = [];
-for dd=1:5
-    x = X0(:,dd); % this digit's indicator vector across conds
-    theta_digit = [1; digitParams(theta_didx{dd})];
-    x(x>0) = theta_digit(numFingers(x>0));
-    M = [M,x];
-end
-     
-G  = M*OM*M';  % Second moment matrix
-
-t=1;
-for i = 1:5 % per finger
-    for j = 1:4 % per number of digits in chord (2:5)- single finger conds are not scaled
-       dM                    = zeros(size(chords));
-       dM(numFingers==j+1,i) = chords(numFingers==j+1,i);
-       dGdtheta(:,:,t)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
-       dGdtheta(:,:,t)       = dGdtheta(:,:,t)*digitParams(t); % scaled derivative  
-       t=t+1;
-    end
-end
-end
-
-function [G,dGdtheta] = pcmGroup_modelpred_superDuperFlex(theta,Model)
-% Predicts G-matrix from the 4 parameters of the simple
-% scaling model and returns the derivative in respect to the parameters
-% Finger params are hardcoded based on perscription (so change accordingly)
-% Harvest appropriate params
-weightParams = exp(theta(1:75));
-% single finger features
-A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
-OM = A*A';
-% G = A*A'; 
-% [V,lam_G] = eig(full(G));
-% dS    = diag(lam_G);
-% idx   = dS>eps;
-% OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)';
-
-% fully flexible weighting of fingers in each chord
-chords     = pp1_encoding('chords');
-M = chords';
-idx = find(M);
-idx = idx(6:end); % don't change single finger weights
-M(idx) = weightParams;
-M = M';
-G = M*OM*M';  % Second moment matrix
-
-% parameter index matrix (for derivative calculation)
-Widx = [zeros(5) chords(6:end,:)'];
-Widx(idx) = 1:75;
-Widx = Widx';
-for i = 1:75 % per weight param
-    dM                    = zeros(size(chords));
-    dM(Widx==i)           = 1;
-    dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
-    dGdtheta(:,:,i)       = dGdtheta(:,:,i)*weightParams(i); % scaled derivative 
-end
-end
-
-function [G,dGdtheta] = pcmGroup_modelpred_normDistance(theta,Model)
-% Predicts G-matrix under the normalization model that applies
-% normalization based on single-finger cortical distances.
-
-% Conceptually, local inhibition will occur moreso when to cortical
-% patterns (representations) overlap more strongly than when the patterns
-% overlap less.
-
-% To estimate the degree of overlap, we use group-averaged single finger
-% dissimilarities.
-
-% The normalization applied is a constant factor whose scale is dependent on the cortical
-% dissimiarity. Here we estimate one normalization factor
-
-% Harvest appropriate params
-scaleParam = exp(theta(1));
-% single finger features
-A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
-% G = A*A'; 
-% [V,lam_G] = eig(full(G));
-% dS    = diag(lam_G);
-% idx   = dS>eps;
-% OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)'; % make semi-pos definite
-OM = A*A'; 
-
-% normalization features
-chords = pp1_encoding('chords');
-numFingers = sum(chords,2);
-M      = chords;
-distMat= rsa_squareRDM(Model.distances);
-maxDist= max(Model.distances)+0.001;
-for ii=6:31 
-    idx = find(M(ii,:)>0); % which fingers are stimulated?
-    for jj = idx % find avg. distance between this stimulated finger and all other stimulated fingers
-        otherFingers = idx(idx~=jj);
-        d_avg = mean(distMat(jj,otherFingers));
-        M(ii,jj)= d_avg;
-    end
-end
-M(6:31,:) = M(6:31,:).*scaleParam;% rescale normalization by the average distance between simultaneously stimulated fingers
-G = M*OM*M';  % Second moment matrix
-
-dM                    = zeros(size(chords));
-dM(numFingers>1,:) = chords(numFingers>1,:);
-dGdtheta(:,:,1)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
-dGdtheta(:,:,1)       = dGdtheta(:,:,1)*scaleParam(1); % scaled derivative 
-% 
-% for i = 1:4 % scale param
-%     dM                    = zeros(size(chords));
-%     dM(numFingers==i+1,:) = chords(numFingers==i+1,:);
-%     dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
-%     dGdtheta(:,:,i)       = dGdtheta(:,:,i)*scaleParam(i); % scaled derivative 
-% end
-end
-
-function [G,dGdtheta] = pcmGroup_modelpred_flexNormDistance(theta,Model)
-% Predicts G-matrix under the normalization model that applies
-% normalization based on single-finger cortical distances.
-
-% Conceptually, local inhibition will occur moreso when to cortical
-% patterns (representations) overlap more strongly than when the patterns
-% overlap less.
-
-% To estimate the degree of overlap, we use group-averaged single finger
-% dissimilarities.
-
-% The normalization applied is a constant factor whose scale is dependent on the cortical
-% dissimiarity. Here we estimate one normalization factor
-
-% Harvest appropriate params
-scaleParams = exp(theta(1:4));
-% single finger features
-A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
-% G = A*A'; 
-% [V,lam_G] = eig(full(G));
-% dS    = diag(lam_G);
-% idx   = dS>eps;
-% OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)'; % make semi-pos definite
-OM = A*A'; 
-
-% activity scaling feature
-chords     = pp1_encoding('chords');
-M          = chords;
-numFingers = sum(M,2);
-for i = 1:4
-    M(numFingers==i+1,:) = M(numFingers==i+1,:).*scaleParams(i);
-end
-
-% distance feature
-M2 = chords;
-distMat= rsa_squareRDM(Model.distances);
-for ii=6:31 
-    idx = find(M2(ii,:)>0); % which fingers are stimulated?
-    for jj = idx % find avg. distance between this stimulated finger and all other stimulated fingers
-        otherFingers = idx(idx~=jj);
-        d_avg = mean(distMat(jj,otherFingers));
-        M2(ii,jj)= d_avg;
-    end
-end
-M=M.*M2;% rescale normalization by the average distance between simultaneously stimulated fingers
-G = M*OM*M';  % Second moment matrix
-
-for i = 1:4 % scale params
-    dM                    = zeros(size(chords));
-    dM(numFingers==i+1,:) = chords(numFingers==i+1,:);
-    dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
-    dGdtheta(:,:,i)       = dGdtheta(:,:,i)*scaleParams(i); % scaled derivative 
-end
-end
 
 
-function [rss,dLdtheta] = model_linearGradient(theta,Ysf,Y)
-% linear model:
-% Ypred = X*Y_sf - X*J.*q1 + Q.*q1
-%   where X is chord indicator matrix [31x5],
-%   Y_sf are single finger patterns [5xP], 
-%   J is matrix of ones [5xP],
-%   Q is matrix of ones [31xP],
-%   q1 is baseline scalar parameter.
 
-% dRSSdq1 = Q'*T1 - T0'*T1 - T1'*T0 + T1'*Q
-%   where T0 = X*J,
-%   T1 = Y - X*Y_sf - X*J.*q1 + Q.*q
-%
-% We can simplify T1:
-%   T1 = Y - X*Y_sf - X*J.*q1 + Q.*q
-%      = Y - Ypred
-%      = residuals
+%% old stuff
 
-
-Ypred = pp1_encoding('predictModelPatterns',Ysf,'summation',theta);
-Q = ones(size(Ypred));
-J = ones(size(Ysf));
-X = pp1_encoding('chords');
-T0 = X*J;
-res = (Y-mean(Y,2))-(Ypred-mean(Ypred,2)); % residuals after mean pattern removal
-dLdtheta = sum(sum( Q'*res - T0'*res - res'*T0 + res'*Q ));
-rss = sum(sum(res.^2));
-end
+% % function [G,dGdtheta] = pcmGroup_modelpred_superFlex(theta,Model)
+% % % Predicts G-matrix from the 4 parameters of the simple
+% % % scaling model and returns the derivative in respect to the parameters
+% % % Finger params are hardcoded based on perscription (so change accordingly)
+% % % Harvest appropriate params
+% % digitParams = exp(theta(1:20));
+% % % single finger features
+% % A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
+% % OM = A*A';
+% % % G = A*A'; 
+% % % [V,lam_G] = eig(full(G));
+% % % dS    = diag(lam_G);
+% % % idx   = dS>eps;
+% % % OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)';
+% % % activity scaling feature
+% % chords     = pp1_encoding('chords');
+% % X0         = chords;
+% % numFingers = sum(X0,2);
+% % theta_didx = {[1:4],[5:8],[9:12],[13:16],[17:20]};
+% % M = [];
+% % for dd=1:5
+% %     x = X0(:,dd); % this digit's indicator vector across conds
+% %     theta_digit = [1; digitParams(theta_didx{dd})];
+% %     x(x>0) = theta_digit(numFingers(x>0));
+% %     M = [M,x];
+% % end
+% %      
+% % G  = M*OM*M';  % Second moment matrix
+% % 
+% % t=1;
+% % for i = 1:5 % per finger
+% %     for j = 1:4 % per number of digits in chord (2:5)- single finger conds are not scaled
+% %        dM                    = zeros(size(chords));
+% %        dM(numFingers==j+1,i) = chords(numFingers==j+1,i);
+% %        dGdtheta(:,:,t)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
+% %        dGdtheta(:,:,t)       = dGdtheta(:,:,t)*digitParams(t); % scaled derivative  
+% %        t=t+1;
+% %     end
+% % end
+% % end
+% % 
+% % function [G,dGdtheta] = pcmGroup_modelpred_superDuperFlex(theta,Model)
+% % % Predicts G-matrix from the 4 parameters of the simple
+% % % scaling model and returns the derivative in respect to the parameters
+% % % Finger params are hardcoded based on perscription (so change accordingly)
+% % % Harvest appropriate params
+% % weightParams = exp(theta(1:75));
+% % % single finger features
+% % A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
+% % OM = A*A';
+% % % G = A*A'; 
+% % % [V,lam_G] = eig(full(G));
+% % % dS    = diag(lam_G);
+% % % idx   = dS>eps;
+% % % OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)';
+% % 
+% % % fully flexible weighting of fingers in each chord
+% % chords     = pp1_encoding('chords');
+% % M = chords';
+% % idx = find(M);
+% % idx = idx(6:end); % don't change single finger weights
+% % M(idx) = weightParams;
+% % M = M';
+% % G = M*OM*M';  % Second moment matrix
+% % 
+% % % parameter index matrix (for derivative calculation)
+% % Widx = [zeros(5) chords(6:end,:)'];
+% % Widx(idx) = 1:75;
+% % Widx = Widx';
+% % for i = 1:75 % per weight param
+% %     dM                    = zeros(size(chords));
+% %     dM(Widx==i)           = 1;
+% %     dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
+% %     dGdtheta(:,:,i)       = dGdtheta(:,:,i)*weightParams(i); % scaled derivative 
+% % end
+% % end
+% % 
+% % function [G,dGdtheta] = pcmGroup_modelpred_normDistance(theta,Model)
+% % % Predicts G-matrix under the normalization model that applies
+% % % normalization based on single-finger cortical distances.
+% % 
+% % % Conceptually, local inhibition will occur moreso when to cortical
+% % % patterns (representations) overlap more strongly than when the patterns
+% % % overlap less.
+% % 
+% % % To estimate the degree of overlap, we use group-averaged single finger
+% % % dissimilarities.
+% % 
+% % % The normalization applied is a constant factor whose scale is dependent on the cortical
+% % % dissimiarity. Here we estimate one normalization factor
+% % 
+% % % Harvest appropriate params
+% % scaleParam = exp(theta(1));
+% % % single finger features
+% % A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
+% % % G = A*A'; 
+% % % [V,lam_G] = eig(full(G));
+% % % dS    = diag(lam_G);
+% % % idx   = dS>eps;
+% % % OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)'; % make semi-pos definite
+% % OM = A*A'; 
+% % 
+% % % normalization features
+% % chords = pp1_encoding('chords');
+% % numFingers = sum(chords,2);
+% % M      = chords;
+% % distMat= rsa_squareRDM(Model.distances);
+% % maxDist= max(Model.distances)+0.001;
+% % for ii=6:31 
+% %     idx = find(M(ii,:)>0); % which fingers are stimulated?
+% %     for jj = idx % find avg. distance between this stimulated finger and all other stimulated fingers
+% %         otherFingers = idx(idx~=jj);
+% %         d_avg = mean(distMat(jj,otherFingers));
+% %         M(ii,jj)= d_avg;
+% %     end
+% % end
+% % M(6:31,:) = M(6:31,:).*scaleParam;% rescale normalization by the average distance between simultaneously stimulated fingers
+% % G = M*OM*M';  % Second moment matrix
+% % 
+% % dM                    = zeros(size(chords));
+% % dM(numFingers>1,:) = chords(numFingers>1,:);
+% % dGdtheta(:,:,1)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
+% % dGdtheta(:,:,1)       = dGdtheta(:,:,1)*scaleParam(1); % scaled derivative 
+% % % 
+% % % for i = 1:4 % scale param
+% % %     dM                    = zeros(size(chords));
+% % %     dM(numFingers==i+1,:) = chords(numFingers==i+1,:);
+% % %     dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
+% % %     dGdtheta(:,:,i)       = dGdtheta(:,:,i)*scaleParam(i); % scaled derivative 
+% % % end
+% % end
+% % 
+% % function [G,dGdtheta] = pcmGroup_modelpred_flexNormDistance(theta,Model)
+% % % Predicts G-matrix under the normalization model that applies
+% % % normalization based on single-finger cortical distances.
+% % 
+% % % Conceptually, local inhibition will occur moreso when to cortical
+% % % patterns (representations) overlap more strongly than when the patterns
+% % % overlap less.
+% % 
+% % % To estimate the degree of overlap, we use group-averaged single finger
+% % % dissimilarities.
+% % 
+% % % The normalization applied is a constant factor whose scale is dependent on the cortical
+% % % dissimiarity. Here we estimate one normalization factor
+% % 
+% % % Harvest appropriate params
+% % scaleParams = exp(theta(1:4));
+% % % single finger features
+% % A = Model.Ac(:,:,1); % A = pcm_diagonalize(G_singleFinger)
+% % % G = A*A'; 
+% % % [V,lam_G] = eig(full(G));
+% % % dS    = diag(lam_G);
+% % % idx   = dS>eps;
+% % % OM    = V(:,idx)*lam_G(idx,idx)*V(:,idx)'; % make semi-pos definite
+% % OM = A*A'; 
+% % 
+% % % activity scaling feature
+% % chords     = pp1_encoding('chords');
+% % M          = chords;
+% % numFingers = sum(M,2);
+% % for i = 1:4
+% %     M(numFingers==i+1,:) = M(numFingers==i+1,:).*scaleParams(i);
+% % end
+% % 
+% % % distance feature
+% % M2 = chords;
+% % distMat= rsa_squareRDM(Model.distances);
+% % for ii=6:31 
+% %     idx = find(M2(ii,:)>0); % which fingers are stimulated?
+% %     for jj = idx % find avg. distance between this stimulated finger and all other stimulated fingers
+% %         otherFingers = idx(idx~=jj);
+% %         d_avg = mean(distMat(jj,otherFingers));
+% %         M2(ii,jj)= d_avg;
+% %     end
+% % end
+% % M=M.*M2;% rescale normalization by the average distance between simultaneously stimulated fingers
+% % G = M*OM*M';  % Second moment matrix
+% % 
+% % for i = 1:4 % scale params
+% %     dM                    = zeros(size(chords));
+% %     dM(numFingers==i+1,:) = chords(numFingers==i+1,:);
+% %     dGdtheta(:,:,i)       = dM*OM*M'+M*OM*dM'; % derivative for chords with numFingers i
+% %     dGdtheta(:,:,i)       = dGdtheta(:,:,i)*scaleParams(i); % scaled derivative 
+% % end
+% % end
+% % 
+% % 
+% % function [rss,dLdtheta] = model_linearGradient(theta,Ysf,Y)
+% % % linear model:
+% % % Ypred = X*Y_sf - X*J.*q1 + Q.*q1
+% % %   where X is chord indicator matrix [31x5],
+% % %   Y_sf are single finger patterns [5xP], 
+% % %   J is matrix of ones [5xP],
+% % %   Q is matrix of ones [31xP],
+% % %   q1 is baseline scalar parameter.
+% % 
+% % % dRSSdq1 = Q'*T1 - T0'*T1 - T1'*T0 + T1'*Q
+% % %   where T0 = X*J,
+% % %   T1 = Y - X*Y_sf - X*J.*q1 + Q.*q
+% % %
+% % % We can simplify T1:
+% % %   T1 = Y - X*Y_sf - X*J.*q1 + Q.*q
+% % %      = Y - Ypred
+% % %      = residuals
+% % 
+% % 
+% % Ypred = pp1_encoding('predictModelPatterns',Ysf,'summation',theta);
+% % Q = ones(size(Ypred));
+% % J = ones(size(Ysf));
+% % X = pp1_encoding('chords');
+% % T0 = X*J;
+% % res = (Y-mean(Y,2))-(Ypred-mean(Ypred,2)); % residuals after mean pattern removal
+% % dLdtheta = sum(sum( Q'*res - T0'*res - res'*T0 + res'*Q ));
+% % rss = sum(sum(res.^2));
+% % end
 
 
 
