@@ -40,9 +40,13 @@ hem        = {'lh','rh'};                                                   % le
 hemLetter  = {'L','R'};
 hemName    = {'CortexLeft','CortexRight'};
 %hemNum     = [1 2];
-regname    = {'ba3A','ba3B','ba1','ba2','rM1','cM1','SII','S1','M1','SPLa','SPLp','VPL','MGN','LGN'};        % Cortical ROIs, 5 = S1, 6 = M1; Thalamus = 12                                             % roi names, independent of hemisphere    
-cortical   = repmat([1 1 1 1 1 1 1 1 1 1 1 0 0 0],1,2);
-thalamic   = repmat([0 0 0 0 0 0 0 0 0 0 0 1 1 1],1,2);
+%regname    = {'ba3A','ba3B','ba1','ba2','rM1','cM1','SII','S1','M1','SPLa','SPLp','VPL','MGN','LGN'};        % Cortical ROIs, 5 = S1, 6 = M1; Thalamus = 12 
+regname    = {'S1','M1','SPLa','SPLp'};% roi names, independent of hemisphere    
+%cortical   = repmat([1 1 1 1 1 1 1 1 1 1 1 0 0 0],1,2);
+cortical   = repmat([1 1 1 1],1,2);
+
+%thalamic   = repmat([0 0 0 0 0 0 0 0 0 0 0 1 1 1],1,2);
+thalamic   = repmat([0 0 0 0],1,2);
 regSide    = [ones(size(regname)),...                                       % Hemisphere of the roi
                 ones(size(regname)).*2];                                    % [1 = left hemi (contra), 2 = right hemi (ipsi)]
 regType    = [1:length(regname),...                                         % roi # (within hemisphere)
@@ -269,14 +273,14 @@ switch(what)
             '1234','1235','1245','1345','2345','12345'}; 
         varargout = {chords,chord_strings};                                                      
     case 'LIST_subjs'               
-        D = dload(fullfile(baseDir,'subj_info.txt'));
+        D = datload(fullfile(baseDir,'subj_info.txt'));
         
         if nargout==0
             fprintf('\nSN\torigSN\tID\t\tAge\tGender\tHandedness\t#fMRI Sessions\tFieldmaps\tChecked ROIs?');
             fprintf('\n--\t------\t--\t\t---\t------\t----------\t--------------\t---------\t-------------\n');
             for s = unique(D.sn)'
                 S = getrow(D,ismember(D.sn,s));
-                fprintf('%02d\t%s\t%s\t\t%d\t%d\t%s\t\t%d\t\t%d\t\t%d',S.sn,S.origSN{1},S.ID{1},S.age,S.gender,S.handedness{1},S.fmri_sessions,S.fmap,S.checkedROIs);
+                fprintf('%02d\t%s\t%s\t\t%d\t%d\t%s\t\t%d\t\t%d\t\t%d',S.sn,S.origSN{1},S.ID{1},S.age,S.gender,S.handedness,S.fmri_sessions,S.fmap,S.checkedROIs);
                 fprintf('\n');
             end
             fprintf('\n');
@@ -301,7 +305,7 @@ switch(what)
         sn = 1;
         vararginoptions(varargin,{'sn'});
 
-        D = dload(fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{sn})));
+        D = datload(fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{sn})));
         % plot alignment of TR time and trial onset time
         runNum = unique(D.BN);
         numRun = numel(runNum);
@@ -335,7 +339,7 @@ switch(what)
         sn = 1;
         vararginoptions(varargin,{'sn'});
 
-        D = dload(fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{sn})));
+        D = datload(fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{sn})));
         figure('Color',[1 1 1])
         for r = unique(D.BN)'
             d = getrow(D,D.BN==r);
@@ -424,7 +428,7 @@ switch(what)
             fprintf('%s\n',subj_name{s});
             dataFileIn  = fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{s}));
             
-            D    = dload(dataFileIn);
+            D    = datload(dataFileIn);
             runs = unique(D.BN);
             for r = runs'
                 trials  = D.TN(D.BN==r);
@@ -484,7 +488,7 @@ switch(what)
             fprintf('%s\n',subj_name{s});
             dataFileIn  = fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{s}));
             
-            D    = dload(dataFileIn);
+            D    = datload(dataFileIn);
             runs = unique(D.BN);
             for r = runs'
                 d = getrow(D,D.BN==r); % trials from this run
@@ -700,7 +704,7 @@ switch(what)
             dataFileIn  = fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{s}));
             dataFileOut = fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{s}));
             T           = []; % output structure for subject
-            D           = dload(dataFileIn);
+            D           = datload(dataFileIn);
             runs        = unique(D.BN);
             for r = runs'
                 trials  = D.TN(D.BN==r);
@@ -735,7 +739,7 @@ switch(what)
             dataFileIn  = fullfile(behavDir,sprintf('%s_%s.dat',filePrefix,subj_name{s}));
             dataFileOut = fullfile(behavDir,sprintf('%s_%s_ana.mat',filePrefix,subj_name{s}));
             T           = []; % output structure for subject
-            D           = dload(dataFileIn);
+            D           = datload(dataFileIn);
             runs        = unique(D.BN);
             for r = runs'
                 trials  = D.TN(D.BN==r);
@@ -1972,7 +1976,7 @@ switch(what)
         end
         
         % Load subject's .dat file (has info on each trial)
-        D = dload(fullfile(behavDir,sprintf('pp1_fmri_%s.dat',subj_name{sn})));
+        D = datload(fullfile(behavDir,sprintf('pp1_fmri_%s.dat',subj_name{sn})));
         % calculate onset times (in seconds), correcting for removed dummy scans
         D.onset = D.startTimeMeas./1000 - TR_length*numDummys + D.cueTime./1000; % correct timing for removed dummy scans
         % Do some subject structure fields.
@@ -3576,9 +3580,11 @@ switch(what)
         sn = pp1_imana('getSubjs');
         vararginoptions(varargin,{'sn'});
         
-        thalamicMarker = [8133,8115,8109,8233,8215,8209]; % values of voxels assigned to each of the 3 thalamic regions (vpl,mgn,lgn) split by hemisphere
-        corticalMarker = [1,2,3,4,5,6,7,1,2,7,8]; % values of surface nodes assigned to the cortical rois
-        corticalFile   = {'D1','D1','D1','D1','D1','D1','D1','D2','D2','D2','D2'}; % different files for coritcal rois
+        %thalamicMarker = [8133,8115,8109,8233,8215,8209]; % values of voxels assigned to each of the 3 thalamic regions (vpl,mgn,lgn) split by hemisphere
+        %corticalMarker = [1,2,3,4,5,6,7,1,2,7,8]; % values of surface nodes assigned to the cortical rois
+        corticalMarker = [1,2,7,8]; % values of surface nodes assigned to the cortical rois
+        %corticalFile   = {'D1','D1','D1','D1','D1','D1','D1','D2','D2','D2','D2'}; % different files for coritcal rois
+        corticalFile   = {'D2','D2','D2','D2'}; % different files for coritcal rois
         
         for s = sn % for each subject
             R = {};
@@ -3589,9 +3595,10 @@ switch(what)
             mask      = fullfile(glmDir{1},subjName,'mask.nii,1');  % load mask file now 
             for h = 1:2 % per hemisphere
                 wbFilePrefix = fullfile(wbDir,subjName,[subjName '.' hemLetter{h}]);
-                regFile1 = fullfile(atlasDir,['ROI_pp1.164k.' hemLetter{h} '.label.gii']);
+                %regFile1 = fullfile(atlasDir,['ROI_pp1.164k.' hemLetter{h} '.label.gii']);
                 regFile2 = fullfile(atlasDir,['ROI.164k.' hemLetter{h} '.label.gii']);
-                D1       = gifti(regFile1);
+                surface = fullfile(atlasDir, sprintf('fs_LR.%sk.%s.flat.surf.gii', '164', hemLetter{h}));
+                %D1       = gifti(regFile1);
                 D2       = gifti(regFile2);
                 for r = 1:numregions % make regions
                     % make R region structure for participant
@@ -3604,10 +3611,11 @@ switch(what)
                     % Mapping of rois is different if cortical or thalamic:
                     if cortical(r)==1 && thalamic(r)==0 % cortical surface rois
                         eval(['D=' corticalFile{r} ';']);
-                        R{j}.type     = 'surf_nodes_wb';
+                        R{j}.type     = 'surf_nodes';
                         R{j}.location = find(D.cdata(:,1)==corticalMarker(r));
                         R{j}.white    = [wbFilePrefix '.white.164k.surf.gii'];
                         R{j}.pial     = [wbFilePrefix '.pial.164k.surf.gii'];
+                        R{j}.flat     = surface;
                         R{j}.linedef  = [5,0,1]; % take 5 steps along node between white (0) and pial (1) surfaces
                         R{j}.image    = mask;    % functional mask
                         if strcmp(corticalFile{r},'D1')
@@ -3615,20 +3623,22 @@ switch(what)
                         elseif strcmp(corticalFile{r},'D2')
                             R{j}.origFile = regFile2;
                         end
-                    elseif thalamic(r)==1 && cortical(r)==0 % thalamic rois
-                        % make temporary functional mask of thalamic nuclei
-                        R{j}.type   = 'roi_image';
-                        R{j}.value  = thalamicMarker(t);
-                        R{j}.file   = fullfile(anatomicalDir,subjName,sprintf('%s_thalamicNuclei.nii',subjName));
-                        t = t+1;
+%                     elseif thalamic(r)==1 && cortical(r)==0 % thalamic rois
+%                         % make temporary functional mask of thalamic nuclei
+%                         R{j}.type   = 'roi_image';
+%                         R{j}.value  = thalamicMarker(t);
+%                         R{j}.file   = fullfile(anatomicalDir,subjName,sprintf('%s_thalamicNuclei.nii',subjName));
+%                         t = t+1;
                     end
                     % update roi ticker
                     j = j+1;
                 end    
             end
-            exculdePairs = [1,5; 1,6; 2,5; 2,6; 3,5; 3,6; 8,9]; % exclude voxels that span across CS
-            excludePairs = [exculdePairs; exculdePairs+numregions]; % do this exclusion for rois in both hemispsheres
-            R = region_calcregions(R,'exclude',excludePairs,'exclude_thres',0.75);
+            % Mahdiyar
+            %exculdePairs = [1,5; 1,6; 2,5; 2,6; 3,5; 3,6; 8,9]; % exclude voxels that span across CS
+            %excludePairs = [exculdePairs; exculdePairs+numregions]; % do this exclusion for rois in both hemispsheres
+            %R = region_calcregions(R,'exclude',excludePairs,'exclude_thres',0.75);
+            R = region_calcregions(R);
             cd(regDir);
             save(['regions_' subjName '.mat'],'R');
             fprintf('..done\n');
@@ -4018,14 +4028,95 @@ switch(what)
         end
         
         %__________________________________________________________________
+    
+    case 'NoiseNormalization'
+        I   = pp1_imana('LIST_subjs');
+        %sn  = pp1_imana('getSubjs');
+        sn = 2;
+        glm = 4;
+        roi = 1;
+        plotON = 1;
+        vararginoptions(varargin,{'sn','glm','roi','plotON'});
+        
+        s=sn;
+        
+        subjName = I.origSN{s};
+        fprintf('%s...',subjName);
+        % load files
+        load(fullfile(glmDir{glm}, subjName,'SPM.mat'));  % load subject's SPM data structure (SPM struct)
+
+        % updating the filenames
+        for j = 1:length(SPM.xY.VY)
+            SPM.xY.VY(j).fname = strrep(SPM.xY.VY(j).fname,...
+                '/Users/sarbuckle/DATA/passivePatterns1/fmri',...
+                baseDir);
+        end
+        load(fullfile(regDir,sprintf('regions_%s.mat',subj_name{s})));          % load subject's region parcellation & depth structure (R)
+
+        % TR img info
+        V = SPM.xY.VY;
+        Y = region_getdata(V, R{roi});  % Data Y is N x P (P is in order of transpose of R{r}.depth)
+        [~,P] = size(Y);
+
+        xX    = SPM.xX;                                            %%% take the design
+        [T,Q] = size(xX.X);
+            
+        %%% Get partions: For each run (1:K), find the time points (T) and regressors (K+Q) that belong to the run
+        partT = nan(T,1);
+        partQ = nan(Q,1);
+        Nrun=length(SPM.Sess);                                     %%% number of runs
+        for b=1:Nrun
+            partT(SPM.Sess(b).row,1)=b;
+            partQ(SPM.Sess(b).col,1)=b;
+            partQ(SPM.xX.iB(b),1)=b;                               %%% Add intercepts
+        end
+        
+        %%% redo the first-level GLM using matlab functions 
+        KWY=spm_filter(xX.K,xX.W*Y);                               %%% filter out low-frequence trends in Y
+        res=spm_sp('r',xX.xKXs,KWY);                               %%% residuals: res  = Y - X*beta
+        
+        clear KWY
+        
+        % shrink=zeros(Nrun,1);
+        Sw_hat = zeros(P,P,Nrun);
+        if plotON
+            figure()
+        end
+        for b=1:Nrun
+            idxT    = partT==b;             % Time points for this partition 
+            % idxQ    = partQ==i;             % Regressors for this partition 
+            % numFilt = size(xX.K(i).X0,2);   % Number of filter variables for this run 
+            
+            df = SPM.xX.trRV/(Nrun*mean(diag(SPM.xX.Bcov)));
+            % in the scaling of the noise, take into account mean beta-variance 
+            [~,~,Sw_hat(:,:,b)]=rsa.stat.covdiag(res(idxT,:),df,'shrinkage',0);
+            %Sw_hat(:,:,i) = corr(res(idxT,:));
+            if plotON
+                subplot(3,ceil(Nrun/3),b)
+                imagesc(Sw_hat(:,:,b))
+            end
+        end     
+        cd(cwd);
+        
+        info = struct();
+        info.partT = partT;
+        info.df = df;
+        info.Nrun = Nrun;
+        info.R = R;
+        info.res = res;
+        varargout = {info};
+        
+        1==1;
         
     case 'ROI_getBetas'                                                     % STEP 5.3   :  Harvest activity patterns from specified rois
         % case to extract first-level regression coefficients (betas/
         % activity patterns) from rois per subject
         I   = pp1_imana('LIST_subjs');
-        sn  = pp1_imana('getSubjs');
+        %sn  = pp1_imana('getSubjs');
+        sn = 2;
         glm = 4;
-        roi = [1:9];%[1:28];
+        %roi = [1:9];%[1:28];
+        roi = 1;
         append = 1; % add betas to currently existing datastructure?
         vararginoptions(varargin,{'sn','glm','roi','append'});
         
@@ -4048,6 +4139,15 @@ switch(what)
             fprintf('%s...',subjName);
             % load files
             load(fullfile(glmDir{glm}, subjName,'SPM.mat'));  % load subject's SPM data structure (SPM struct)
+            
+            % updating the filenames
+            for j = 1:length(SPM.xY.VY)
+                SPM.xY.VY(j).fname = strrep(SPM.xY.VY(j).fname,...
+                    '/Users/sarbuckle/DATA/passivePatterns1/fmri',...
+                    baseDir);
+            end
+            
+            
             D = load(fullfile(glmDir{glm}, subjName,'SPM_info.mat'));
             load(fullfile(regDir,sprintf('regions_%s.mat',subj_name{s})));          % load subject's region parcellation & depth structure (R)
             % add percent signal change imgs for subject
