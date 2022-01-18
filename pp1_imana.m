@@ -4029,6 +4029,10 @@ switch(what)
         
         %__________________________________________________________________
     
+        
+        
+        
+        
     case 'NoiseNormalization'
         I   = pp1_imana('LIST_subjs');
         %sn  = pp1_imana('getSubjs');
@@ -4104,10 +4108,94 @@ switch(what)
         info.Nrun = Nrun;
         info.R = R;
         info.res = res;
+        save('info.mat','info')
         varargout = {info};
+    case 'NoiseNormalization_plot'
         
-        1==1;
+        load('info.mat')
+        partT = info.partT;
+        df = info.df;
+        Nrun = info.Nrun;
+        R = info.R;
+        res = info.res;
+        [t,p] = size(res);
+        res = bsxfun(@minus,res,sum(res)./t);  % Subtract mean of each time series fast  
+        df_overall = df*Nrun;
+        % calculate covariance and vectorize it
+        Sw_hat = (1/df_overall).*(res'*res);
+        Sw_hat = Sw_hat - diag(diag(Sw_hat));
+        Sw_hat = squareform(Sw_hat)';
         
+        % 3d distance
+        dist_3d = pdist(R{1}.data)';
+        
+        % 2d distance
+        dist_2d = pdist(R{1}.flatcoord)';
+        
+        
+        plt.scatter(dist_2d,dist_3d);
+        xlabel('2d distance')
+        ylabel('3d distance')
+        % devide the gray matter brain into four artificial layers
+        % 1 is closest to white and 4 is closest to CFS
+        
+        
+        edges = [min(R{1}.depth) (min(R{1}.depth)+0.7):0.2:max(R{1}.depth)];
+        [Y, E] = discretize(R{1}.depth,edges);
+        
+        layer = zeros(size(R{1}.depth));
+        for j = 1:length(E)
+            layer(Y==j)=E(j);
+        end
+        R{1}.layer = Y;
+        
+        
+        %{
+        n_layer = 5;
+        width = 1/n_layer;
+        for l = 1:n_layer
+            if l==1
+                R{1}.layer(R{1}.depth<=(l*width)) = l*width;
+            elseif l==n_layer
+                R{1}.layer(R{1}.depth>((l-1)*width)) = l*width;
+            else
+                R{1}.layer(R{1}.depth>((l-1)*width) & R{1}.depth<=(l*width)) = l*width;
+            end
+        end
+        %}
+        
+        
+        selected_pairs = find(dist_3d<5 & dist_3d>4);
+        all_pairs = nchoosek(1:p,2);
+        
+        H1 = R{1}.layer(all_pairs(:,1));
+        H2 = R{1}.layer(all_pairs(:,2));
+        
+        
+        
+        sum_depth_sq = repmat(R{1}.depth,1,length(R{1}.depth));
+        sum_depth_sq = sum_depth_sq.^2;
+        sum_depth_sq = (sum_depth_sq + sum_depth_sq');
+        sum_depth_sq = sum_depth_sq - diag(diag(sum_depth_sq));
+        sum_depth_sq = squareform(sum_depth_sq)';
+        
+        edges = [min(sum_depth_sq):0.2:max(sum_depth_sq)];
+        [Y, E] = discretize(sum_depth_sq,edges);
+        
+        layer = zeros(size(R{1}.depth));
+        for j = 1:length(E)
+            layer(Y==j)=E(j);
+        end
+        R{1}.layer2 = layer;
+        R{1}.layer2 = round( R{1}.layer2 , 2 );
+        
+        
+        %plt.line(R{1}.layer2(selected_pairs),Sw_hat(selected_pairs))
+        %ylabel('cov')
+        %xlabel('squared sum depths')
+        
+        %contour_pivot(H1(selected_pairs),H2(selected_pairs),Sw_hat(selected_pairs),'mean','labels','auto');
+        %axis square
     case 'ROI_getBetas'                                                     % STEP 5.3   :  Harvest activity patterns from specified rois
         % case to extract first-level regression coefficients (betas/
         % activity patterns) from rois per subject
