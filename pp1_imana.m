@@ -4035,81 +4035,93 @@ switch(what)
         
     case 'NoiseNormalization'
         I   = pp1_imana('LIST_subjs');
-        %sn  = pp1_imana('getSubjs');
-        sn = 2;
+        sn  = pp1_imana('getSubjs');
+        %sn = 2;
         glm = 4;
-        roi = 1;
+        roi = 1; % only S1
         plotON = 1;
         vararginoptions(varargin,{'sn','glm','roi','plotON'});
         
-        s=sn;
+        %s=sn;
+        noise_pattern = cell(length(sn),1);
         
-        subjName = I.origSN{s};
-        fprintf('%s...',subjName);
-        % load files
-        load(fullfile(glmDir{glm}, subjName,'SPM.mat'));  % load subject's SPM data structure (SPM struct)
+        counter = 0;
+        for s=sn
+            counter = counter+1;
+            subjName = I.origSN{s};
+            fprintf('%s...',subjName);
+            % load files
+            load(fullfile(glmDir{glm}, subjName,'SPM.mat'));  % load subject's SPM data structure (SPM struct)
 
-        % updating the filenames
-        for j = 1:length(SPM.xY.VY)
-            SPM.xY.VY(j).fname = strrep(SPM.xY.VY(j).fname,...
-                '/Users/sarbuckle/DATA/passivePatterns1/fmri',...
-                baseDir);
-        end
-        load(fullfile(regDir,sprintf('regions_%s.mat',subj_name{s})));          % load subject's region parcellation & depth structure (R)
-
-        % TR img info
-        V = SPM.xY.VY;
-        Y = region_getdata(V, R{roi});  % Data Y is N x P (P is in order of transpose of R{r}.depth)
-        [~,P] = size(Y);
-
-        xX    = SPM.xX;                                            %%% take the design
-        [T,Q] = size(xX.X);
-            
-        %%% Get partions: For each run (1:K), find the time points (T) and regressors (K+Q) that belong to the run
-        partT = nan(T,1);
-        partQ = nan(Q,1);
-        Nrun=length(SPM.Sess);                                     %%% number of runs
-        for b=1:Nrun
-            partT(SPM.Sess(b).row,1)=b;
-            partQ(SPM.Sess(b).col,1)=b;
-            partQ(SPM.xX.iB(b),1)=b;                               %%% Add intercepts
-        end
-        
-        %%% redo the first-level GLM using matlab functions 
-        KWY=spm_filter(xX.K,xX.W*Y);                               %%% filter out low-frequence trends in Y
-        res=spm_sp('r',xX.xKXs,KWY);                               %%% residuals: res  = Y - X*beta
-        
-        clear KWY
-        
-        % shrink=zeros(Nrun,1);
-        Sw_hat = zeros(P,P,Nrun);
-        if plotON
-            figure()
-        end
-        for b=1:Nrun
-            idxT    = partT==b;             % Time points for this partition 
-            % idxQ    = partQ==i;             % Regressors for this partition 
-            % numFilt = size(xX.K(i).X0,2);   % Number of filter variables for this run 
-            
-            df = SPM.xX.trRV/(Nrun*mean(diag(SPM.xX.Bcov)));
-            % in the scaling of the noise, take into account mean beta-variance 
-            [~,~,Sw_hat(:,:,b)]=rsa.stat.covdiag(res(idxT,:),df,'shrinkage',0);
-            %Sw_hat(:,:,i) = corr(res(idxT,:));
-            if plotON
-                subplot(3,ceil(Nrun/3),b)
-                imagesc(Sw_hat(:,:,b))
+            % updating the filenames
+            for j = 1:length(SPM.xY.VY)
+                SPM.xY.VY(j).fname = strrep(SPM.xY.VY(j).fname,...
+                    '/Users/sarbuckle/DATA/passivePatterns1/fmri',...
+                    baseDir);
             end
-        end     
-        cd(cwd);
+            load(fullfile(regDir,sprintf('regions_%s.mat',subj_name{s})));          % load subject's region parcellation & depth structure (R)
+
+            % TR img info
+            V = SPM.xY.VY;
+            R = R{roi};
+            Y = region_getdata(V, R);  % Data Y is N x P (P is in order of transpose of R{r}.depth)
+            [~,P] = size(Y);
+
+            xX    = SPM.xX;                                            %%% take the design
+            [T,Q] = size(xX.X);
+
+            %%% Get partions: For each run (1:K), find the time points (T) and regressors (K+Q) that belong to the run
+            partT = nan(T,1);
+            partQ = nan(Q,1);
+            Nrun=length(SPM.Sess);                                     %%% number of runs
+            for b=1:Nrun
+                partT(SPM.Sess(b).row,1)=b;
+                partQ(SPM.Sess(b).col,1)=b;
+                partQ(SPM.xX.iB(b),1)=b;                               %%% Add intercepts
+            end
+
+            %%% redo the first-level GLM using matlab functions 
+            KWY=spm_filter(xX.K,xX.W*Y);                               %%% filter out low-frequence trends in Y
+            res=spm_sp('r',xX.xKXs,KWY);                               %%% residuals: res  = Y - X*beta
+
+            clear KWY
+
+            % shrink=zeros(Nrun,1);
+            Sw_hat = zeros(P,P,Nrun);
+            if plotON
+                figure()
+            end
+            for b=1:Nrun
+                idxT    = partT==b;             % Time points for this partition 
+                % idxQ    = partQ==i;             % Regressors for this partition 
+                % numFilt = size(xX.K(i).X0,2);   % Number of filter variables for this run 
+
+                df = SPM.xX.trRV/(Nrun*mean(diag(SPM.xX.Bcov)));
+                % in the scaling of the noise, take into account mean beta-variance 
+                [~,~,Sw_hat(:,:,b)]=rsa.stat.covdiag(res(idxT,:),df,'shrinkage',0);
+                %Sw_hat(:,:,i) = corr(res(idxT,:));
+                if plotON
+                    subplot(3,ceil(Nrun/3),b)
+                    imagesc(Sw_hat(:,:,b))
+                end
+            end     
+            cd(cwd);
+
+            data = struct();
+            data.partT = partT;
+            data.df = df;
+            data.Nrun = Nrun;
+            data.R = R;
+            data.res = res;
+            
+            noise_pattern{counter} = data;
+            %save('info.mat','info')
+            %varargout = {info};
+        end 
+
+        save('noise_pattern.mat','noise_pattern')
+        varargout = {noise_pattern};
         
-        info = struct();
-        info.partT = partT;
-        info.df = df;
-        info.Nrun = Nrun;
-        info.R = R;
-        info.res = res;
-        save('info.mat','info')
-        varargout = {info};
     case 'NoiseNormalization_plot'
         
         load('info.mat')
