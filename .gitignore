@@ -2,3 +2,4 @@
 error.log
 Icon
 *.asv
+.DS_Store
